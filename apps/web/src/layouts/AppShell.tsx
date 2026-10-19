@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { connectSocket, disconnectSocket, useSocketEvent } from "@/lib/socket";
 import { plural } from "@/lib/format";
 import { useFeedback } from "@/components/feedback";
+import { AndroidAppLink } from "@/components/AndroidApp";
 import { Avatar, cx, Logo } from "@/components/ui";
 
 const NAV = [
@@ -95,6 +96,7 @@ export function AppShell() {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-1">
+            <AndroidAppLink className="mr-2 hidden md:inline-flex" />
             <Link
               to="/#invites"
               aria-label={invites ? `${plural(invites, "pending invite")}` : "Invites"}
@@ -132,6 +134,10 @@ export function AppShell() {
                       Admin settings
                     </MenuLink>
                   )}
+                  <AndroidAppLink
+                    label="Get the Android app"
+                    className="h-auto w-full justify-start rounded-xl border-0 bg-transparent px-3 py-2.5 text-[14px] font-normal hover:bg-surface-2"
+                  />
                   <button
                     role="menuitem"
                     onClick={() => signOut().then(() => navigate("/login"))}

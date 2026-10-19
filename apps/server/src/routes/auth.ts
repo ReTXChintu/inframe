@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { config } from "../config.js";
 import { one, query, tx } from "../db/pool.js";
@@ -8,6 +8,8 @@ import { sendMail } from "../lib/mailer.js";
 import {
   endSession,
   hashPassword,
+  isMobileClient,
+  presentedRefreshToken,
   REFRESH_COOKIE,
   rotateSession,
   signAccessToken,
@@ -34,8 +36,13 @@ export const serializeUser = (u: Pick<UserRow, "id" | "email" | "name" | "create
   createdAt: u.created_at,
 });
 
-async function issue(reply: FastifyReply, user: UserRow) {
-  return { accessToken: await signAccessToken(user.id, user.token_version), user: serializeUser(user) };
+/** Tokens for the client. The refresh token goes in the body only for the mobile app (browsers keep it in the cookie). */
+async function issue(req: FastifyRequest, user: UserRow, refreshToken: string) {
+  return {
+    accessToken: await signAccessToken(user.id, user.token_version),
+    ...(isMobileClient(req) ? { refreshToken } : {}),
+    user: serializeUser(user),
+  };
 }
 
 // Brute-force protection on everything that takes a password or sends mail.
@@ -45,6 +52,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/api/auth/signup", strict, async (req, reply) => {
     const body = parse(z.object({ name: personName, email, password }), req.body);
     const passwordHash = await hashPassword(body.password);
+    let refreshToken = "";
     const user = await tx(async (db) => {
       // The very first account becomes the super admin. The lock makes two
       // simultaneous first sign-ups queue up, so only one of them gets it.
@@ -59,11 +67,11 @@ export async function authRoutes(app: FastifyInstance) {
       if (!created) throw conflict("An account with this email already exists. Try signing in.");
       // Every account gets its own "self" person, enrolled later with a selfie.
       await db.query("INSERT INTO people (owner_id, kind, name) VALUES ($1, 'self', $2)", [created.id, body.name]);
-      await startSession(reply, created.id, req.headers["user-agent"], db);
+      refreshToken = await startSession(reply, created.id, req.headers["user-agent"], db);
       return created;
     });
     reply.code(201);
-    return issue(reply, user);
+    return issue(req, user, refreshToken);
   });
 
   app.post("/api/auth/login", strict, async (req, reply) => {
@@ -73,23 +81,23 @@ export async function authRoutes(app: FastifyInstance) {
     if (!user || !(await verifyPassword(user.password_hash, body.password))) {
       throw new AppError(401, "invalid_credentials", "That email and password don't match.");
     }
-    await startSession(reply, user.id, req.headers["user-agent"]);
-    return issue(reply, user);
+    const refreshToken = await startSession(reply, user.id, req.headers["user-agent"]);
+    return issue(req, user, refreshToken);
   });
 
   app.post("/api/auth/refresh", async (req, reply) => {
-    const token = req.cookies[REFRESH_COOKIE];
-    const userId = token ? await rotateSession(reply, token, req.headers["user-agent"]) : null;
-    const user = userId ? await one<UserRow>("SELECT * FROM users WHERE id = $1", [userId]) : undefined;
-    if (!user) {
+    const token = presentedRefreshToken(req);
+    const rotated = token ? await rotateSession(reply, token, req.headers["user-agent"]) : null;
+    const user = rotated ? await one<UserRow>("SELECT * FROM users WHERE id = $1", [rotated.userId]) : undefined;
+    if (!rotated || !user) {
       reply.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
       throw unauthorized("Your session has ended. Please sign in again.");
     }
-    return issue(reply, user);
+    return issue(req, user, rotated.refreshToken);
   });
 
   app.post("/api/auth/logout", async (req, reply) => {
-    await endSession(reply, req.cookies[REFRESH_COOKIE]);
+    await endSession(reply, presentedRefreshToken(req));
     return { ok: true };
   });
 
@@ -121,6 +129,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/api/auth/reset-password", strict, async (req, reply) => {
     const body = parse(z.object({ token: z.string().min(10), password }), req.body);
     const passwordHash = await hashPassword(body.password);
+    let refreshToken = "";
     const user = await tx(async (db) => {
       const reset = await one<{ user_id: string }>(
         `UPDATE password_resets SET used_at = now()
@@ -138,9 +147,9 @@ export async function authRoutes(app: FastifyInstance) {
         db,
       );
       await db.query("DELETE FROM sessions WHERE user_id = $1", [reset.user_id]);
-      await startSession(reply, reset.user_id, req.headers["user-agent"], db);
+      refreshToken = await startSession(reply, reset.user_id, req.headers["user-agent"], db);
       return updated!;
     });
-    return issue(reply, user);
+    return issue(req, user, refreshToken);
   });
 }

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireUser } from "../auth/guard.js";
-import { hashPassword, startSession, signAccessToken, verifyPassword } from "../auth/tokens.js";
+import { hashPassword, isMobileClient, startSession, signAccessToken, verifyPassword } from "../auth/tokens.js";
 import { one, query, tx } from "../db/pool.js";
 import { AppError, badRequest, conflict, forbidden, notFound, parse } from "../lib/errors.js";
 import { decodable, forModel, makeSelfie } from "../lib/images.js";
@@ -70,11 +70,14 @@ export async function meRoutes(app: FastifyInstance) {
         db,
       );
       await db.query("DELETE FROM sessions WHERE user_id = $1", [req.user.id]);
-      await startSession(reply, req.user.id, req.headers["user-agent"], db);
-      return row!;
+      const refreshToken = await startSession(reply, req.user.id, req.headers["user-agent"], db);
+      return { ...row!, refreshToken };
     });
-    // Other devices are signed out; this one continues with a fresh token.
-    return { accessToken: await signAccessToken(req.user.id, updated.token_version) };
+    // Other devices are signed out; this one continues with fresh tokens.
+    return {
+      accessToken: await signAccessToken(req.user.id, updated.token_version),
+      ...(isMobileClient(req) ? { refreshToken: updated.refreshToken } : {}),
+    };
   });
 
   app.delete("/api/me", async (req, reply) => {

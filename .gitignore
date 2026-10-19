@@ -4,3 +4,8 @@ data/
 .env
 *.log
 .DS_Store
+
+# Published by the Android release workflow on the server, never committed.
+apps/web/public/inframe.apk
+apps/web/public/app-version.json
+apps/web/public/.inframe-apk.*

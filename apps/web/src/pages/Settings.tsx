@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { plural, PROVIDER_LABEL, timeAgo } from "@/lib/format";
 import { errorMessage, useFeedback } from "@/components/feedback";
+import { AndroidAppCard } from "@/components/AndroidApp";
 import { connectGoogle, GoogleNotSetUp, MegaConnectModal, ProviderMark, useConnections } from "@/components/StoragePicker";
 import { Button, Card, Modal, PasswordField, Segmented, Spinner, TextField } from "@/components/ui";
 
@@ -59,6 +60,7 @@ export function SettingsPage() {
           <ChevronRight className="size-5 text-ink-2" />
         </Link>
       )}
+      <AndroidAppCard />
       {/* Two columns on wide screens: account basics left, storage + security right. */}
       <div className="grid items-start gap-5 xl:grid-cols-2">
         <div className="flex flex-col gap-5">

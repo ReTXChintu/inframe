@@ -138,6 +138,39 @@ npm start         # one process: API + realtime + workers + the built web app
 - Memory to plan for: each upload in flight (up to `MAX_UPLOAD_MB`), plus `MEDIA_CACHE_MB` for the thumbnail cache.
 - Scale photo processing with `WORKER_CONCURRENCY`.
 
+## Android app (`apps/mobile`)
+
+A Flutter app for the same API:
+- sign in / sign up / reset password
+- events with invites
+- join by code or by **scanning the QR**
+- galleries with a pinch-zoom viewer and save-to-phone
+- uploads from the gallery with per-photo progress
+- **selfies with the phone camera** (works even when the website runs on plain http)
+- family members, cross-event "My photos", basic event settings, and MEGA connections
+
+It keeps its refresh token in the phone's secure storage: it sends `x-inframe-client: mobile`, and the API returns the token in the body instead of a cookie. The app checks `/app-version.json` and offers an update when a newer build is published.
+
+```bash
+cd apps/mobile
+flutter run --dart-define=API_BASE_URL=http://<server>:<port>     # on a phone or emulator
+```
+
+### Releases → APK on the server
+`.github/workflows/android-release.yml` runs on every **published GitHub release**:
+1. Builds a signed APK (version = release tag, build number = run number) and attaches it to the release.
+2. Streams it over SSH to the server, where the deploy key can only run `scripts/deploy-from-ci.sh`.
+3. That script saves it as `apps/web/public/inframe.apk` with `app-version.json`, runs `git pull`, then `npm ci`, `npm run build`, and `pm2 restart inframe`.
+
+The web app then shows **Get the Android app** (header, account menu, Settings, sign-in page). Run the workflow manually to get a test APK as an artifact without deploying.
+
+Secrets the workflow needs:
+- **Signing:** `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`
+- **Deploy:** `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`
+- **Optional variable:** `API_BASE_URL`
+
+**Keep the signing keystore safe.** Android only installs updates signed with the same key.
+
 ## Project layout
 
 ```

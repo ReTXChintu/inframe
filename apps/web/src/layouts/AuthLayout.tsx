@@ -1,4 +1,5 @@
 import { Link, Outlet } from "react-router";
+import { AndroidAppLink } from "@/components/AndroidApp";
 import { Logo } from "@/components/ui";
 
 /** Split screen: form on the left, a framed "contact sheet" on the right (desktop). */
@@ -12,7 +13,10 @@ export function AuthLayout() {
         <main className="flex w-full flex-1 flex-col justify-center py-10">
           <Outlet />
         </main>
-        <p className="text-[13px] text-muted">Photos stay in your own Google Drive or MEGA.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[13px] text-muted">Photos stay in your own Google Drive or MEGA.</p>
+          <AndroidAppLink label="Get the Android app" />
+        </div>
       </div>
       <aside className="relative hidden overflow-hidden bg-ink lg:block" aria-hidden>
         <ContactSheet />

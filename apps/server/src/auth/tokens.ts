@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import { hash as argonHash, verify as argonVerify } from "@node-rs/argon2";
-import type { FastifyReply } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import { config } from "../config.js";
 import { one, query, type Queryable } from "../db/pool.js";
 import { randomToken, sha256 } from "../lib/crypto.js";
@@ -45,8 +45,20 @@ export async function verifyState<T>(token: string): Promise<T | null> {
   }
 }
 
-/** Creates a session row and sets the httpOnly refresh cookie. */
-export async function startSession(reply: FastifyReply, userId: string, userAgent?: string, db?: Queryable) {
+/*
+ * Browsers keep the refresh token in an httpOnly cookie. The mobile app sends
+ * `x-inframe-client: mobile`, gets the refresh token in the JSON body instead
+ * (stored in the device's secure storage) and presents it as `x-refresh-token`.
+ */
+export const isMobileClient = (req: FastifyRequest) => req.headers["x-inframe-client"] === "mobile";
+
+export function presentedRefreshToken(req: FastifyRequest): string | undefined {
+  const header = req.headers["x-refresh-token"];
+  return req.cookies[REFRESH_COOKIE] ?? (typeof header === "string" && header ? header : undefined);
+}
+
+/** Creates a session row, sets the httpOnly refresh cookie, and returns the raw token. */
+export async function startSession(reply: FastifyReply, userId: string, userAgent?: string, db?: Queryable): Promise<string> {
   const token = randomToken();
   await query(
     `INSERT INTO sessions (user_id, token_hash, user_agent, expires_at)
@@ -62,6 +74,7 @@ export async function startSession(reply: FastifyReply, userId: string, userAgen
     path: "/api/auth",
     maxAge: REFRESH_TTL_DAYS * 24 * 60 * 60,
   });
+  return token;
 }
 
 /** Single-use: the presented refresh token is deleted and a new one issued. */
@@ -71,8 +84,8 @@ export async function rotateSession(reply: FastifyReply, token: string, userAgen
     [sha256(token)],
   );
   if (!session) return null;
-  await startSession(reply, session.user_id, userAgent);
-  return session.user_id;
+  const refreshToken = await startSession(reply, session.user_id, userAgent);
+  return { userId: session.user_id, refreshToken };
 }
 
 export async function endSession(reply: FastifyReply, token: string | undefined) {

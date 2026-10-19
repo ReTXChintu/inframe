@@ -76,7 +76,10 @@ await app.register(adminRoutes);
 if (fs.existsSync(config.webDist)) {
   await app.register(fastifyStatic, { root: config.webDist, wildcard: false });
   app.setNotFoundHandler((req, reply) => {
-    if (req.method === "GET" && !/^\/(api|media|socket\.io)\//.test(req.url)) {
+    const path = req.url.split("?")[0] ?? "";
+    // Client-side routes get the app; a missing *file* (e.g. /inframe.apk before the
+    // first Android release) is a real 404, not an HTML page.
+    if (req.method === "GET" && !/^\/(api|media|socket\.io)\//.test(path) && !/\.[a-z0-9]{2,5}$/i.test(path)) {
       return reply.type("text/html").sendFile("index.html");
     }
     return reply.code(404).send({ code: "not_found", message: "Not found." });

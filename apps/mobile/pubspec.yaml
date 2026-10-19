@@ -1,0 +1,43 @@
+name: inframe
+description: "InFrame: shared event albums that find every photo you're in."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.2
+
+dependencies:
+  cached_network_image: ^4.0.4
+  dio: ^5.11.1
+  flutter:
+    sdk: flutter
+  flutter_secure_storage: ^11.2.0
+  gal: ^2.3.3
+  google_fonts: ^8.0.0
+  image_picker: ^1.2.4
+  intl: ^0.20.3
+  mobile_scanner: ^7.4.2
+  package_info_plus: ^10.2.2
+  path_provider: ^2.1.6
+  provider: ^6.1.5+1
+  qr_flutter: ^4.1.0
+  share_plus: ^13.3.1
+  url_launcher: ^6.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+
+# `dart run flutter_launcher_icons` regenerates the launcher icons from these.
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/icon/icon.png
+  adaptive_icon_background: "#17161B"
+  adaptive_icon_foreground: assets/icon/foreground.png
+  min_sdk_android: 21
