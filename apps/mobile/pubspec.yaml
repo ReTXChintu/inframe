@@ -1,8 +1,7 @@
 name: inframe
 description: "InFrame: shared event albums that find every photo you're in."
 publish_to: 'none'
-version: 0.1.0+1
-
+version: 0.2.0+2
 environment:
   sdk: ^3.13.2
 
