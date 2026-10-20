@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../api/api.dart';
 import '../api/models.dart';
+import '../uploads/upload_queue.dart';
 
 enum SessionStatus { loading, signedIn, signedOut }
 
@@ -58,6 +59,7 @@ class Session extends ChangeNotifier {
       // signing out locally either way
     }
     await api.clearSession();
+    await uploads.reset();
     me = null;
     status = SessionStatus.signedOut;
     notifyListeners();
@@ -66,6 +68,7 @@ class Session extends ChangeNotifier {
   void _signedOutRemotely() {
     if (status != SessionStatus.signedIn) return;
     api.clearSession();
+    uploads.reset();
     me = null;
     status = SessionStatus.signedOut;
     notifyListeners();

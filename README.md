@@ -6,15 +6,17 @@ Shared photo albums for trips, weddings and parties. Everyone adds photos, and I
 - **Events** (trip / wedding / party / other) with dates, a cover, albums, and roles: **owner**, **co-host**, **guest**.
 - **Invite people** with an 8-character code (`XXXX-XXXX`), a link, a QR code, or by email. Email invitees join with one click, as a guest or a co-host.
 - **Storage is yours, and the server keeps no files.** Each event lives in a Google Drive or MEGA folder that the owner connects:
-  - Uploads from guests are written straight into that folder.
+  - **Photos and videos** from guests end up in that folder. The server only holds an upload on disk until a worker has copied it there.
   - Photos you drop into the folder directly are picked up automatically.
   - Sub-folders become albums.
-  - Each photo's thumbnail and preview are saved next to it, in a hidden `.inframe` sub-folder of the same folder.
+  - Each photo's thumbnail and preview (a video's poster frame) are saved next to it, in a hidden `.inframe` sub-folder of the same folder.
+- **Videos** are stored and played (with seeking) but never face-scanned.
+- **Duplicate check:** a file with the same name, size and modified date as one already in the event (or already queued) gets a *Skip duplicates / Upload anyway* prompt.
 - **Face matching** through an external model URL:
   - Take a selfie once, and InFrame finds you in every event you belong to, including photos added later.
   - Add family members with their own selfie.
   - **My photos** shows your matches across all your events.
-- **Live updates** over Socket.IO: per-file upload progress (uploading → saving to storage → finding faces → matched), a "You're in N new photos" toast, and gallery refresh.
+- **Live updates** over Socket.IO: per-file upload progress (uploading → queued on server → saving to storage → making previews → finding faces → matched), a "You're in N new photos" toast, and gallery refresh.
 - Gallery with **All / You / family / Favourites / Your uploads / Albums** views, multi-select, ZIP download of originals, and a full-screen viewer.
 - **Privacy controls for hosts:**
   - Turn joining by code on or off, and rotate the code.
@@ -33,12 +35,13 @@ apps/server  Fastify 5 + Postgres (Neon) + pgvector + pg-boss   (API, jobs, real
 
 | Step | What happens |
 |------|--------------|
-| Upload | The browser sends each file on its own request, so every file gets real progress. The server holds it in memory and writes it into the event's Drive/MEGA folder (or its album sub-folder) before answering, then queues `photo-ingest`. Nothing touches the server's disk. |
-| Ingest | The server converts HEIC and makes a 480px thumbnail and a 2000px preview in memory. It saves them as `<folder>/.inframe/<name>.<hash>.thumb.webp` and `.preview.webp`, then queues `photo-faces`. The hash comes from the original's storage id, so two photos with the same name never share files. |
+| Upload | The browser (or the Android app, as a native background upload) sends each file on its own request, so every file gets real progress. The API streams it to the **spool** (`SPOOL_DIR`), records it, queues `photo-ingest` and answers `202` right away: from then on the user can close the tab or the app. |
+| Store | A **worker process** streams the spooled file into the event's Drive/MEGA folder (or its album sub-folder) and deletes the spool copy. If storage keeps failing, the spool copy is kept so *Retry* can resend it (it's cleaned up after 7 days). |
+| Ingest | The worker converts HEIC and makes a 480px thumbnail and a 2000px preview in memory (for videos: a poster frame and the duration, via the bundled ffmpeg). It saves them as `<folder>/.inframe/<name>.<hash>.thumb.webp` and `.preview.webp`, then queues `photo-faces` (photos only). The hash comes from the original's storage id, so two photos with the same name never share files. |
 | Faces | The preview (≤1920px JPEG) is sent to the model's `/extract`. Each face's 512-d embedding is L2-normalised and stored in `faces` (pgvector). |
 | Match | A person matches a photo when any face in it has cosine similarity `> MATCH_THRESHOLD` with that person's selfie. Only people belonging to members of that event are checked. Results go in `photo_matches`. They are recomputed when a selfie changes, someone joins or leaves, or a photo is re-scanned. |
 | Sync | Every `SYNC_CRON` (and on demand), each event's folder is listed, skipping `.inframe` folders. New files are ingested; files deleted from the folder disappear from InFrame, and their thumbnail and preview are trashed. |
-| Serving | Thumbnails and previews are streamed from storage through a size-capped **memory** cache (`MEDIA_CACHE_MB`). If someone empties a `.inframe` folder, the missing files are rebuilt automatically. Selfies (512px) are kept in the database, since guests may have no storage of their own. |
+| Serving | Thumbnails and previews are streamed from storage through a size-capped **memory** cache (`MEDIA_CACHE_MB`). Originals support HTTP `Range`, so videos seek without downloading the whole file. If someone empties a `.inframe` folder, the missing files are rebuilt automatically. Selfies (512px) are kept in the database, since guests may have no storage of their own. |
 
 What a folder looks like in Drive/MEGA:
 
@@ -56,7 +59,7 @@ InFrame · Goa trip/
     .inframe/…
 ```
 
-Jobs run on **pg-boss**, a queue stored in the same Postgres database (no Redis). Failed jobs retry with backoff. A face-detection failure is recorded as *failed*, never as "no faces", so hosts can retry it from the event page.
+Jobs run on **pg-boss**, a queue stored in the same Postgres database (no Redis), served by separate worker processes (`npm run worker`). Workers report progress back to the API process through Postgres `NOTIFY`, and the API pushes it to browsers. Failed jobs retry with backoff. A face-detection failure is recorded as *failed*, never as "no faces", so hosts can retry it from the event page.
 
 ## Setup
 
@@ -123,20 +126,23 @@ Nothing to configure on the server. Owners connect MEGA in **Settings → Storag
 Set SMTP in **Admin → Settings → Email**, or with `SMTP_*` / `MAIL_FROM` in `.env`, for password resets and invites. Without `SMTP_HOST`, emails are printed to the server log, so you can click the links locally.
 
 ### Trying it without Google or MEGA
-Set `DEV_MEMORY_STORAGE=true`. A **Dev memory storage** option then appears when you create an event, and the whole flow works against it: upload, thumbnails, faces, sync, ZIP. Everything in it is lost when the server restarts, and the server refuses to start with it in production.
+Set `DEV_MEMORY_STORAGE=true`. A **Dev memory storage** option then appears when you create an event, and the whole flow works against it: upload, thumbnails, faces, sync, ZIP. Everything in it is lost when the server restarts, and the server refuses to start with it in production. Since those files live in the API process's memory, the API then runs the workers itself (`npm run dev` still starts a worker process, which exits straight away in this mode).
 
 ## Production
 
 ```bash
-npm run build     # builds apps/web/dist and apps/server/dist
-npm start         # one process: API + realtime + workers + the built web app
+npm run build                                   # builds apps/web/dist and apps/server/dist
+pm2 startOrReload ecosystem.config.cjs --update-env   # "inframe" (API + realtime + web) and "inframe-worker" × INFRAME_WORKERS
 ```
+
+`npm start` runs just the API. Without workers nothing gets stored, so either run `npm run worker` next to it or set `RUN_WORKERS_IN_API=true` for a single-process setup.
 
 - Set `NODE_ENV=production` and `APP_URL` to the public HTTPS URL.
 - Put a TLS-terminating proxy (Caddy, Nginx, Traefik) in front, and forward websockets for `/socket.io`.
-- The server is stateless on disk: files live in Drive/MEGA and data in Postgres, so it can be redeployed anywhere without volumes.
-- Memory to plan for: each upload in flight (up to `MAX_UPLOAD_MB`), plus `MEDIA_CACHE_MB` for the thumbnail cache.
-- Scale photo processing with `WORKER_CONCURRENCY`.
+- Files live in Drive/MEGA and data in Postgres. The only disk use is the spool: uploads waiting for a worker. Give `SPOOL_DIR` room for a backlog of videos. Workers must run on the same machine as the API, since they read the spool.
+- Limits: `MAX_UPLOAD_MB` per photo (default 50), `MAX_VIDEO_MB` per video (default 4096).
+- Scale with more worker processes (`INFRAME_WORKERS`, default 2) and `WORKER_CONCURRENCY` jobs each. `WORKER_QUEUES=store,faces,sync` picks which queues a worker serves, e.g. a dedicated face-scanning worker.
+- Memory to plan for: `MEDIA_CACHE_MB` for the thumbnail cache, plus a photo being processed per worker job.
 
 ## Android app (`apps/mobile`)
 
@@ -145,7 +151,9 @@ A Flutter app for the same API:
 - events with invites
 - join by code or by **scanning the QR**
 - galleries with a pinch-zoom viewer and save-to-phone
-- uploads from the gallery with per-photo progress
+- **its own gallery picker** (albums, photos and videos, select all, long-press-and-drag to select a run; no 100-file limit)
+- **background uploads**: each file is a native upload (WorkManager foreground service with a progress notification), so it carries on with the app in the background or closed. It authenticates with a 24-hour *upload ticket* (`POST /api/events/:id/upload-ticket`, sent as `x-upload-ticket`) instead of the short-lived access token
+- the duplicate check, and video playback in the viewer
 - **selfies with the phone camera** (works even when the website runs on plain http)
 - family members, cross-event "My photos", basic event settings, and MEGA connections
 
@@ -173,7 +181,7 @@ It refuses to run off `main`, with uncommitted changes, when behind `origin/main
 `.github/workflows/android-release.yml` runs on every **pushed `v*` tag** (as above) or **release published on GitHub**:
 1. Builds a signed APK (version = tag, build number = run number), creates the GitHub release if it doesn't exist, and attaches the APK.
 2. Streams it over SSH to the server, where the deploy key can only run `scripts/deploy-from-ci.sh`.
-3. That script saves it as `apps/web/public/inframe.apk` with `app-version.json`, runs `git pull`, then `npm ci`, `npm run build`, and `pm2 restart inframe`.
+3. That script saves it as `apps/web/public/inframe.apk` with `app-version.json`, runs `git pull`, then `npm ci`, `npm run build`, and `pm2 startOrReload ecosystem.config.cjs` (the API and the workers).
 
 The web app then shows **Get the Android app** (header, account menu, Settings, sign-in page). Run the workflow manually to get a test APK as an artifact without deploying.
 

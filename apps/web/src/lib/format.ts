@@ -62,3 +62,13 @@ export const initials = (name: string) =>
     .slice(0, 2)
     .map((w) => w[0]!.toUpperCase())
     .join("") || "?";
+
+/** 75_000 → "1:15", 3_725_000 → "1:02:05". */
+export function formatDuration(ms: number | null | undefined): string {
+  if (!ms || ms < 0) return "";
+  const total = Math.round(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = String(total % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}

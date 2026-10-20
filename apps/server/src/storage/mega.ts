@@ -1,6 +1,7 @@
 import { Storage, type MutableFile } from "megajs";
-import { looksLikeImage } from "../lib/images.js";
-import { META_FOLDER, StorageError, type FolderRef, type RemoteImage, type StorageProvider } from "./types.js";
+import type { Readable } from "node:stream";
+import { mediaTypeOf } from "../lib/images.js";
+import { META_FOLDER, StorageError, type ByteRange, type FolderRef, type RemoteFile, type StorageProvider } from "./types.js";
 
 export interface MegaCredentials {
   email: string;
@@ -113,19 +114,21 @@ export class MegaProvider implements StorageProvider {
     return existing?.nodeId ?? (await parent.mkdir(name)).nodeId!;
   }
 
-  async listImages(folderId: string): Promise<RemoteImage[]> {
+  async listMedia(folderId: string): Promise<RemoteFile[]> {
     const root = await this.node(folderId, true);
-    const out: RemoteImage[] = [];
+    const out: RemoteFile[] = [];
     const walk = (dir: MutableFile, path: string[], pathIds: string[]) => {
       for (const child of dir.children ?? []) {
+        const mediaType = child.directory ? null : mediaTypeOf(child.name ?? "");
         if (child.directory) {
           if (child.name === META_FOLDER) continue;
           if (path.length < 6) walk(child, [...path, child.name ?? "Folder"], [...pathIds, child.nodeId ?? ""]);
-        } else if (child.nodeId && looksLikeImage(child.name ?? "")) {
+        } else if (child.nodeId && mediaType) {
           out.push({
             id: child.nodeId,
             name: child.name ?? "photo",
             mimeType: null,
+            mediaType,
             size: child.size ?? null,
             parentId: dir.nodeId!,
             path,
@@ -149,6 +152,20 @@ export class MegaProvider implements StorageProvider {
     return file.nodeId!;
   }
 
+  async uploadStream(folderId: string, name: string, _mimeType: string, stream: Readable, size: number): Promise<string> {
+    const folder = await this.node(folderId);
+    return new Promise<string>((resolve, reject) => {
+      // Without a source buffer, megajs returns a writable that encrypts and uploads as data arrives.
+      const upload = folder.upload({ name, size }, undefined, (err, file) => (err ? reject(err) : resolve(file.nodeId!)));
+      stream.once("error", (err) => {
+        upload.destroy(err);
+        reject(err);
+      });
+      upload.once("error", reject);
+      stream.pipe(upload);
+    });
+  }
+
   async putFile(folderId: string, name: string, mimeType: string, data: Buffer): Promise<string> {
     // MEGA has no in-place content update: drop any same-named file, then upload.
     const folder = await this.node(folderId);
@@ -167,9 +184,11 @@ export class MegaProvider implements StorageProvider {
     }
   }
 
-  async openStream(fileId: string) {
+  async openStream(fileId: string, range?: ByteRange) {
     const file = await this.node(fileId);
-    return { stream: file.download({}), size: file.size ?? null, mimeType: null };
+    // megajs ranges are inclusive, like HTTP's.
+    const stream = range ? file.download({ start: range.start, end: range.end }) : file.download({});
+    return { stream, size: range ? range.end - range.start + 1 : (file.size ?? null), mimeType: null };
   }
 
   async trash(fileId: string): Promise<void> {

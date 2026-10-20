@@ -42,34 +42,3 @@ export function cacheDelete(key: string) {
 }
 
 export const mediaKey = (photoId: string, variant: "thumb" | "preview") => `${photoId}:${variant}`;
-
-/*
- * Hand-off for a just-uploaded original: the upload request already holds the
- * bytes, so the ingest job (same process, moments later) takes them from here
- * instead of downloading them back from storage. Bounded and short-lived; on
- * a miss the job simply downloads.
- */
-const STASH_TTL_MS = 5 * 60 * 1000;
-const STASH_MAX_BYTES = 512 * 1024 * 1024;
-const stash = new Map<string, { data: Buffer; at: number }>();
-let stashBytes = 0;
-
-export function stashOriginal(photoId: string, data: Buffer) {
-  const now = Date.now();
-  for (const [k, v] of stash) {
-    if (now - v.at < STASH_TTL_MS && stashBytes + data.length <= STASH_MAX_BYTES) break;
-    stash.delete(k);
-    stashBytes -= v.data.length;
-  }
-  if (stashBytes + data.length > STASH_MAX_BYTES) return;
-  stash.set(photoId, { data, at: now });
-  stashBytes += data.length;
-}
-
-export function takeOriginal(photoId: string): Buffer | undefined {
-  const hit = stash.get(photoId);
-  if (!hit) return undefined;
-  stash.delete(photoId);
-  stashBytes -= hit.data.length;
-  return Date.now() - hit.at < STASH_TTL_MS ? hit.data : undefined;
-}

@@ -4,10 +4,12 @@ import { z } from "zod";
 import { one, query } from "../db/pool.js";
 import { randomToken } from "../lib/crypto.js";
 import { notFound, parse } from "../lib/errors.js";
+import { mimeFor } from "../lib/images.js";
 import { cacheGet, cacheSet, mediaKey } from "../lib/media-cache.js";
 import { verifyMedia } from "../lib/media-urls.js";
 import { enqueueIngest } from "../jobs/queue.js";
 import { eventStorage, StorageError } from "../storage/index.js";
+import type { ByteRange } from "../storage/types.js";
 
 /*
  * Image bytes are served from signed, expiring URLs (minted by the API for
@@ -25,14 +27,28 @@ export function createZipTicket(userId: string, photoIds: string[]) {
   return `/media/zip/${id}`;
 }
 
-function contentTypeFor(name: string, fallback: string | null) {
-  if (fallback && fallback !== "application/octet-stream") return fallback;
-  const ext = name.toLowerCase().split(".").pop();
-  const map: Record<string, string> = {
-    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif",
-    heic: "image/heic", heif: "image/heif", avif: "image/avif", tif: "image/tiff", tiff: "image/tiff", bmp: "image/bmp",
-  };
-  return map[ext ?? ""] ?? "application/octet-stream";
+/**
+ * Parse `Range: bytes=…` against a file of `size` bytes (single ranges only —
+ * what video players send). null = serve the whole file; "invalid" = 416.
+ */
+function parseRange(header: string | undefined, size: number | null): ByteRange | null | "invalid" {
+  if (!header || !size) return null;
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!m || (!m[1] && !m[2])) return null;
+  let start: number;
+  let end: number;
+  if (!m[1]) {
+    // "bytes=-500": the last 500 bytes
+    start = Math.max(0, size - Number(m[2]));
+    end = size - 1;
+  } else {
+    start = Number(m[1]);
+    end = m[2] ? Math.min(Number(m[2]), size - 1) : size - 1;
+  }
+  if (start > end || start >= size) return "invalid";
+  // megajs treats end=0 as "to the end of the file"; ask for one more byte instead.
+  if (end === 0) end = Math.min(1, size - 1);
+  return { start, end };
 }
 
 const disposition = (kind: "inline" | "attachment", name: string) =>
@@ -50,6 +66,8 @@ interface MediaPhoto {
   event_id: string;
   original_name: string;
   mime_type: string | null;
+  media_type: "image" | "video";
+  size_bytes: number | null;
   storage_file_id: string | null;
   thumb_file_id: string | null;
   preview_file_id: string | null;
@@ -79,12 +97,26 @@ export async function mediaRoutes(app: FastifyInstance) {
 
     if (variant === "original") {
       const { provider } = await eventStorage(photo.event_id);
-      const remote = await provider.openStream(photo.storage_file_id ?? "");
+      const total = photo.size_bytes;
+      // Videos need byte ranges for seeking (and iOS/Android players insist on them).
+      const range = parseRange(req.headers.range, total);
+      if (range === "invalid") {
+        return reply.code(416).header("Content-Range", `bytes */${total}`).send();
+      }
+      const remote = await provider.openStream(photo.storage_file_id ?? "", range ?? undefined);
       reply
-        .header("Content-Type", contentTypeFor(photo.original_name, remote.mimeType ?? photo.mime_type))
+        .header("Content-Type", mimeFor(photo.original_name, photo.mime_type ?? remote.mimeType))
         .header("Content-Disposition", disposition(q.dl ? "attachment" : "inline", photo.original_name))
         .header("Cache-Control", "private, max-age=3600");
-      if (remote.size) reply.header("Content-Length", remote.size);
+      if (total) reply.header("Accept-Ranges", "bytes");
+      if (range && total) {
+        reply
+          .code(206)
+          .header("Content-Range", `bytes ${range.start}-${range.end}/${total}`)
+          .header("Content-Length", range.end - range.start + 1);
+      } else if (remote.size ?? total) {
+        reply.header("Content-Length", remote.size ?? total);
+      }
       return reply.send(remote.stream);
     }
 
@@ -94,7 +126,8 @@ export async function mediaRoutes(app: FastifyInstance) {
     if (cached) return sendWebp(reply, cached);
     const fileId = variant === "thumb" ? photo.thumb_file_id : photo.preview_file_id;
     if (!fileId) {
-      await rebuild(id);
+      // A video whose poster couldn't be made has no previews by design — don't keep retrying it.
+      if (photo.media_type !== "video") await rebuild(id);
       throw notFound("Preview");
     }
     try {

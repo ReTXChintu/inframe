@@ -121,6 +121,8 @@ export interface Photo {
   uploaderId: string | null;
   uploaderName: string | null;
   source: "upload" | "storage";
+  mediaType: "image" | "video";
+  durationMs: number | null;
   originalName: string;
   sizeBytes: number | null;
   width: number | null;
@@ -129,7 +131,7 @@ export interface Photo {
   sortAt: string;
   createdAt: string;
   status: "pending" | "processing" | "ready" | "failed";
-  faceStatus: "pending" | "processing" | "done" | "failed";
+  faceStatus: "pending" | "processing" | "done" | "failed" | "skipped";
   faceCount: number;
   error: string | null;
   favorite: boolean;

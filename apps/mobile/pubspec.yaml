@@ -6,6 +6,7 @@ environment:
   sdk: ^3.13.2
 
 dependencies:
+  background_downloader: ^9.6.4
   cached_network_image: ^4.0.4
   dio: ^5.11.1
   flutter:
@@ -18,10 +19,13 @@ dependencies:
   mobile_scanner: ^7.4.2
   package_info_plus: ^10.2.2
   path_provider: ^2.1.6
+  photo_manager: ^3.12.0
+  photo_manager_image_provider: ^2.2.0
   provider: ^6.1.5+1
   qr_flutter: ^4.1.0
   share_plus: ^13.3.1
   url_launcher: ^6.3.3
+  video_player: ^2.14.1
 
 dev_dependencies:
   flutter_test:

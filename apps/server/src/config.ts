@@ -1,3 +1,4 @@
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
@@ -44,9 +45,20 @@ const schema = z.object({
   SMTP_PASS: z.string().optional(),
   MAIL_FROM: z.string().optional(),
 
+  /** Parallel jobs per worker process (storing uploads, thumbnails, face scans). */
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(3),
+  /** Which queues a worker process serves (comma list). Default: all of them. */
+  WORKER_QUEUES: z.string().default("store,faces,sync"),
+  /** Also run the workers inside the API process (single-process setups). Default: separate `worker` process. */
+  RUN_WORKERS_IN_API: bool,
   SYNC_CRON: z.string().default("*/15 * * * *"),
   MAX_UPLOAD_MB: z.coerce.number().int().positive().default(50),
+  MAX_VIDEO_MB: z.coerce.number().int().positive().default(4096),
+  /**
+   * Where uploads wait between "received from the phone/browser" and "stored
+   * in Drive/MEGA". Files are deleted as soon as they're stored.
+   */
+  SPOOL_DIR: z.string().optional(),
 });
 
 const parsed = schema.safeParse(
@@ -72,7 +84,12 @@ export const config = {
   /** Served over HTTPS? Decides the Secure cookie flag (plain http://IP:port hosting must not set it). */
   httpsApp: env.APP_URL.startsWith("https://"),
   devMemoryStorage: env.DEV_MEMORY_STORAGE && !isProd,
+  // Memory storage lives in one process, so its workers must run inside the API.
+  runWorkersInApi: env.RUN_WORKERS_IN_API || (env.DEV_MEMORY_STORAGE && !isProd),
   appUrl: env.APP_URL.replace(/\/$/, ""),
   maxUploadBytes: env.MAX_UPLOAD_MB * 1024 * 1024,
+  maxVideoBytes: env.MAX_VIDEO_MB * 1024 * 1024,
+  spoolDir: env.SPOOL_DIR ? path.resolve(repoRoot, env.SPOOL_DIR) : path.join(os.tmpdir(), "inframe-spool"),
+  workerQueues: new Set(env.WORKER_QUEUES.split(",").map((q) => q.trim()).filter(Boolean)),
   webDist: path.join(repoRoot, "apps/web/dist"),
 };

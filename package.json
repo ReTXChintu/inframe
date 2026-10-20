@@ -6,7 +6,7 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "concurrently -k -n api,web -c yellow,cyan \"npm:dev:server\" \"npm:dev:web\"",
+    "dev": "concurrently -k -n api,worker,web -c yellow,magenta,cyan \"npm:dev:server\" \"npm:dev:worker\" \"npm:dev:web\"",
     "dev:server": "npm run dev -w apps/server",
     "dev:web": "npm run dev -w apps/web",
     "db:migrate": "npm run db:migrate -w apps/server",
@@ -16,7 +16,8 @@
     "release": "node scripts/release.mjs",
     "release:patch": "node scripts/release.mjs patch",
     "release:minor": "node scripts/release.mjs minor",
-    "release:major": "node scripts/release.mjs major"
+    "release:major": "node scripts/release.mjs major",
+    "dev:worker": "npm run dev:worker -w apps/server"
   },
   "devDependencies": {
     "concurrently": "^9.2.5"

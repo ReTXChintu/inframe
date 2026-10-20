@@ -1,8 +1,8 @@
 import { Readable } from "node:stream";
 import { google, type drive_v3 } from "googleapis";
 import { googleSettings } from "../services/settings.js";
-import { looksLikeImage } from "../lib/images.js";
-import { META_FOLDER, StorageError, type FolderRef, type RemoteImage, type StorageProvider } from "./types.js";
+import { mediaTypeOf } from "../lib/images.js";
+import { META_FOLDER, StorageError, type ByteRange, type FolderRef, type RemoteFile, type StorageProvider } from "./types.js";
 
 // Full Drive scope: the creator points us at a folder that already exists
 // and may already contain photos, which the narrower drive.file scope can't read.
@@ -109,8 +109,8 @@ export class GoogleDriveProvider implements StorageProvider {
     return (await this.createFolder(name, parentId)).id;
   }
 
-  async listImages(folderId: string): Promise<RemoteImage[]> {
-    const out: RemoteImage[] = [];
+  async listMedia(folderId: string): Promise<RemoteFile[]> {
+    const out: RemoteFile[] = [];
     const queue: { id: string; path: string[]; pathIds: string[] }[] = [{ id: folderId, path: [], pathIds: [] }];
     try {
       while (queue.length) {
@@ -131,11 +131,12 @@ export class GoogleDriveProvider implements StorageProvider {
               if (path.length < MAX_DEPTH) {
                 queue.push({ id: f.id!, path: [...path, f.name ?? "Folder"], pathIds: [...pathIds, f.id!] });
               }
-            } else if (looksLikeImage(f.name ?? "", f.mimeType)) {
+            } else if (mediaTypeOf(f.name ?? "", f.mimeType)) {
               out.push({
                 id: f.id!,
                 name: f.name ?? "photo",
                 mimeType: f.mimeType ?? null,
+                mediaType: mediaTypeOf(f.name ?? "", f.mimeType)!,
                 size: f.size ? Number(f.size) : null,
                 parentId: id,
                 path,
@@ -158,6 +159,21 @@ export class GoogleDriveProvider implements StorageProvider {
       const res = await this.drive.files.create({
         requestBody: { name, parents: [folderId] },
         media: { mimeType, body: Readable.from(data) },
+        fields: "id",
+        supportsAllDrives: true,
+      });
+      return res.data.id!;
+    } catch (err) {
+      throw wrap(err);
+    }
+  }
+
+  async uploadStream(folderId: string, name: string, mimeType: string, stream: Readable, _size: number): Promise<string> {
+    try {
+      // googleapis uses a resumable/multipart upload and reads the stream as it goes.
+      const res = await this.drive.files.create({
+        requestBody: { name, parents: [folderId] },
+        media: { mimeType, body: stream },
         fields: "id",
         supportsAllDrives: true,
       });
@@ -203,11 +219,11 @@ export class GoogleDriveProvider implements StorageProvider {
     }
   }
 
-  async openStream(fileId: string) {
+  async openStream(fileId: string, range?: ByteRange) {
     try {
       const res = await this.drive.files.get(
         { fileId, alt: "media", supportsAllDrives: true },
-        { responseType: "stream" },
+        { responseType: "stream", headers: range ? { Range: `bytes=${range.start}-${range.end}` } : undefined },
       );
       const len = res.headers["content-length"];
       return {

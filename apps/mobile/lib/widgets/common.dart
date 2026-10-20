@@ -27,6 +27,12 @@ String initials(String name) {
   return s.isEmpty ? '?' : s;
 }
 
+/// 0:42, 3:07, 1:02:15
+String formatDuration(Duration d) {
+  final h = d.inHours, m = d.inMinutes % 60, s = (d.inSeconds % 60).toString().padLeft(2, '0');
+  return h > 0 ? '$h:${m.toString().padLeft(2, '0')}:$s' : '$m:$s';
+}
+
 String formatBytes(int? n) {
   if (n == null || n == 0) return '—';
   const units = ['B', 'KB', 'MB', 'GB'];

@@ -5,10 +5,13 @@ import 'screens/auth_screens.dart';
 import 'screens/home.dart';
 import 'state/session.dart';
 import 'theme.dart';
+import 'uploads/upload_queue.dart';
 import 'widgets/common.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Background uploads: reattach to anything still running from before the app was closed.
+  uploads.init().catchError((Object e) => debugPrint('uploads: init failed: $e'));
   runApp(ChangeNotifierProvider(create: (_) => Session()..start(), child: const InFrameApp()));
 }
 

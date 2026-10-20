@@ -1,10 +1,23 @@
 import type { Server as HttpServer } from "node:http";
+import pg from "pg";
 import { Server } from "socket.io";
 import { z } from "zod";
+import { config } from "../config.js";
+import { pool } from "../db/pool.js";
 import { userFromToken } from "../auth/guard.js";
 import { eventAccess } from "../services/access.js";
 
+/*
+ * Socket.IO lives in the API process. Worker processes (storing uploads,
+ * thumbnails, face scans) have no sockets: they publish with Postgres
+ * NOTIFY on CHANNEL, and the API process LISTENs and forwards to the room.
+ * No Redis needed — the database the workers already use carries it.
+ */
+
+const CHANNEL = "inframe_realtime";
 let io: Server | null = null;
+let listener: pg.Client | null = null;
+let stopping = false;
 
 /**
  * Socket.IO on the API's own HTTP server. The handshake must carry an access
@@ -42,22 +55,66 @@ export function attachRealtime(server: HttpServer) {
     });
   });
 
+  void listen();
   return io;
 }
 
+/** API process: receive events published by worker processes. Reconnects if the connection drops. */
+async function listen() {
+  if (stopping) return;
+  const client = new pg.Client({ connectionString: config.DATABASE_URL });
+  listener = client;
+  const retry = () => {
+    if (listener === client) listener = null;
+    client.end().catch(() => {});
+    if (!stopping) setTimeout(() => void listen(), 3000);
+  };
+  client.on("error", retry);
+  client.on("end", () => listener === client && retry());
+  client.on("notification", (msg) => {
+    if (!msg.payload || !io) return;
+    try {
+      const { room, event, payload } = JSON.parse(msg.payload) as { room: string; event: string; payload: unknown };
+      io.to(room).emit(event, payload);
+    } catch {
+      // malformed message — ignore
+    }
+  });
+  try {
+    await client.connect();
+    await client.query(`LISTEN ${CHANNEL}`);
+  } catch (err) {
+    console.error("[realtime] listener failed:", (err as Error).message);
+    retry();
+  }
+}
+
+function emit(room: string, event: string, payload: unknown) {
+  if (io) {
+    io.to(room).emit(event, payload);
+    return;
+  }
+  // Worker process: hand it to the API process through Postgres (payload limit ~8 KB).
+  const message = JSON.stringify({ room, event, payload });
+  if (message.length > 7900) return;
+  pool.query("SELECT pg_notify($1, $2)", [CHANNEL, message]).catch(() => {});
+}
+
 export function toUser(userId: string, event: string, payload: unknown) {
-  io?.to(`user:${userId}`).emit(event, payload);
+  emit(`user:${userId}`, event, payload);
 }
 
 export function toEvent(eventId: string, event: string, payload: unknown) {
-  io?.to(`event:${eventId}`).emit(event, payload);
+  emit(`event:${eventId}`, event, payload);
 }
 
-/** Drop a user's sockets from an event room (after they leave or are removed). */
+/** Drop a user's sockets from an event room (after they leave or are removed). API process only. */
 export function evictFromEvent(userId: string, eventId: string) {
   io?.in(`user:${userId}`).socketsLeave(`event:${eventId}`);
 }
 
-export function closeRealtime() {
-  return new Promise<void>((resolve) => (io ? io.close(() => resolve()) : resolve()));
+export async function closeRealtime() {
+  stopping = true;
+  await listener?.end().catch(() => {});
+  await new Promise<void>((resolve) => (io ? io.close(() => resolve()) : resolve()));
 }

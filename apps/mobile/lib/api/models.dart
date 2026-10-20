@@ -104,6 +104,8 @@ class Photo {
   String? get eventName => _s(j['eventName']);
   String? get uploaderId => _s(j['uploaderId']);
   String get originalName => _s(j['originalName']) ?? 'photo.jpg';
+  bool get isVideo => j['mediaType'] == 'video';
+  int? get durationMs => _in(j['durationMs']);
   int? get width => _in(j['width']);
   int? get height => _in(j['height']);
   int? get sizeBytes => _in(j['sizeBytes']);

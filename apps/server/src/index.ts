@@ -22,6 +22,8 @@ import { meRoutes } from "./routes/me.js";
 import { memberRoutes } from "./routes/members.js";
 import { photoRoutes } from "./routes/photos.js";
 import { storageRoutes } from "./routes/storage.js";
+import { uploadRoutes } from "./routes/uploads.js";
+import { ensureSpool } from "./lib/spool.js";
 
 const app = Fastify({
   logger: {
@@ -34,7 +36,10 @@ const app = Fastify({
 });
 
 await app.register(cookie);
-await app.register(multipart, { limits: { fileSize: config.maxUploadBytes, files: 1, fields: 10 } });
+// Uploads are streamed to disk (never buffered whole), so the cap is the video limit.
+await app.register(multipart, {
+  limits: { fileSize: Math.max(config.maxUploadBytes, config.maxVideoBytes), files: 1, fields: 10 },
+});
 // Global off; individual routes opt in with `config.rateLimit`.
 await app.register(rateLimit, { global: false });
 
@@ -69,6 +74,7 @@ await app.register(storageRoutes);
 await app.register(eventRoutes);
 await app.register(memberRoutes);
 await app.register(photoRoutes);
+await app.register(uploadRoutes);
 await app.register(mediaRoutes);
 await app.register(adminRoutes);
 
@@ -88,9 +94,14 @@ if (fs.existsSync(config.webDist)) {
 
 await migrate((msg) => app.log.info(msg));
 await loadSettings();
+await ensureSpool();
 await startQueue();
 attachRealtime(app.server);
-await startWorkers();
+// Normally the workers are their own processes (`npm run worker`, pm2 "inframe-worker").
+if (config.runWorkersInApi) {
+  const queues = await startWorkers();
+  app.log.info(`workers running inside the API process (${queues.join(", ")})`);
+}
 await app.listen({ port: config.PORT, host: "0.0.0.0" });
 app.log.info(`InFrame API on :${config.PORT} — open ${config.appUrl}`);
 
@@ -107,3 +118,6 @@ async function shutdown(signal: string) {
 }
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
+// A dropped database connection inside the job queue (pg-boss) surfaces as a
+// stray rejection; log it rather than take the whole API down with it.
+process.on("unhandledRejection", (err) => app.log.error({ err }, "unhandled rejection"));

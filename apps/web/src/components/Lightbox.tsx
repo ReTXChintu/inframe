@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Download, Heart, ImageIcon, Info, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Film, Heart, ImageIcon, Info, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { formatBytes, formatDateTime } from "@/lib/format";
+import { formatBytes, formatDateTime, formatDuration } from "@/lib/format";
 import type { Photo, PhotoDetail } from "@/lib/types";
 import { errorMessage, useFeedback } from "./feedback";
 import { usePhotoActions } from "./photoActions";
@@ -130,8 +130,24 @@ export function Lightbox({ photos, index, onIndex, onClose, onNeedMore }: Props)
               touchX.current = null;
             }}
           >
-            {!loaded && <Spinner className="absolute text-white/60" />}
-            {photo.previewUrl && (
+            {photo.mediaType === "video" ? (
+              photo.originalUrl ? (
+                <video
+                  key={photo.id}
+                  src={photo.originalUrl}
+                  poster={photo.previewUrl ?? undefined}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="max-h-full max-w-full bg-black"
+                />
+              ) : (
+                <p className="text-[14px] text-white/60">This video is still being saved to storage.</p>
+              )
+            ) : (
+              !loaded && <Spinner className="absolute text-white/60" />
+            )}
+            {photo.mediaType !== "video" && photo.previewUrl && (
               <img
                 key={photo.id}
                 src={photo.previewUrl}
@@ -167,9 +183,13 @@ export function Lightbox({ photos, index, onIndex, onClose, onNeedMore }: Props)
                 onClick={() => onIndex(i)}
                 aria-label={`Photo ${i + 1}`}
                 aria-current={i === index}
-                className={cx("size-14 shrink-0 overflow-hidden rounded-md transition-opacity", i === index ? "ring-2 ring-accent" : "opacity-50 hover:opacity-90")}
+                className={cx("grid size-14 shrink-0 place-items-center overflow-hidden rounded-md bg-white/5 transition-opacity", i === index ? "ring-2 ring-accent" : "opacity-50 hover:opacity-90")}
               >
-                {p.thumbUrl && <img src={p.thumbUrl} alt="" loading="lazy" className="size-full object-cover" />}
+                {p.thumbUrl ? (
+                  <img src={p.thumbUrl} alt="" loading="lazy" className="size-full object-cover" />
+                ) : (
+                  p.mediaType === "video" && <Film className="m-auto size-5 text-white/60" />
+                )}
               </button>
             ))}
           </div>
@@ -207,10 +227,24 @@ export function Lightbox({ photos, index, onIndex, onClose, onNeedMore }: Props)
                 {photo.width && photo.height ? `${photo.width} × ${photo.height} · ` : ""}
                 {formatBytes(photo.sizeBytes)}
               </dd>
+              {photo.mediaType === "video" && photo.durationMs ? (
+                <>
+                  <dt className="text-white/50">Length</dt>
+                  <dd>{formatDuration(photo.durationMs)}</dd>
+                </>
+              ) : null}
               <dt className="text-white/50">Faces</dt>
-              <dd>{photo.faceStatus === "done" ? photo.faceCount : photo.faceStatus === "failed" ? "Couldn't scan" : "Scanning…"}</dd>
+              <dd>
+                {photo.faceStatus === "skipped"
+                  ? "Not scanned (video)"
+                  : photo.faceStatus === "done"
+                    ? photo.faceCount
+                    : photo.faceStatus === "failed"
+                      ? "Couldn't scan"
+                      : "Scanning…"}
+              </dd>
             </dl>
-            {d?.canSetCover && (
+            {d?.canSetCover && photo.thumbUrl && (
               <button
                 onClick={() => setCover.mutate()}
                 className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-2 text-[13px] font-medium hover:bg-white/20"

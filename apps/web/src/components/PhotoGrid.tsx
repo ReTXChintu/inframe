@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Check, Heart, ImageOff } from "lucide-react";
+import { Check, Film, Heart, ImageOff, Play } from "lucide-react";
+import { formatDuration } from "@/lib/format";
 import { api } from "@/lib/api";
 import type { Photo, PhotoPage } from "@/lib/types";
 import { cx, Spinner } from "./ui";
@@ -68,7 +69,13 @@ export function PhotoGrid({ photos, selected, onToggle, onOpen, hasMore, loadMor
                   <img src={p.thumbUrl} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
                 ) : (
                   <span className="flex size-full items-center justify-center text-muted">
-                    <ImageOff className="size-6" />
+                    {p.mediaType === "video" ? <Film className="size-6" /> : <ImageOff className="size-6" />}
+                  </span>
+                )}
+                {p.mediaType === "video" && (
+                  <span className="pointer-events-none absolute top-1.5 right-1.5 flex items-center gap-0.5 rounded-full bg-black/55 py-0.5 pr-1.5 pl-1 text-[10px] font-semibold text-white tabular-nums">
+                    <Play className="size-3 fill-white" />
+                    {formatDuration(p.durationMs) || "Video"}
                   </span>
                 )}
                 {showEvent && p.eventName && (

@@ -141,7 +141,8 @@ class Api {
       if (res.statusCode == 401 && !path.startsWith('/api/auth/')) {
         if (await refresh()) {
           res = await attempt();
-        } else {
+        } else if (!await hasSession) {
+          // Only when the server rejected the refresh token, not when we're just offline.
           onSignedOut?.call();
         }
       }
@@ -173,6 +174,12 @@ class Api {
       throw ApiException(res.statusCode ?? 0, 'download', 'Download failed.');
     }
     return res.data!;
+  }
+
+  /// Stream a URL on the server into a local file (videos for "save to phone").
+  Future<void> downloadTo(String url, String path) async {
+    final res = await _dio.download(resolve(url), path, options: Options(receiveTimeout: const Duration(minutes: 30)));
+    if ((res.statusCode ?? 0) >= 400) throw ApiException(res.statusCode ?? 0, 'download', 'Download failed.');
   }
 
   /// Plain GET for public files (app-version.json); null when missing.

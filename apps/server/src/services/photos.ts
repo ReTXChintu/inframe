@@ -10,6 +10,9 @@ export interface PhotoRow {
   uploader_id: string | null;
   uploader_name?: string | null;
   source: "upload" | "storage";
+  media_type: "image" | "video";
+  duration_ms: number | null;
+  thumb_file_id?: string | null;
   original_name: string;
   mime_type: string | null;
   size_bytes: number | null;
@@ -30,6 +33,8 @@ export interface PhotoRow {
 
 export function serializePhoto(p: PhotoRow) {
   const ready = p.status === "ready";
+  // A video whose poster frame couldn't be made has no thumbnail/preview files.
+  const previews = ready && (p.media_type !== "video" || Boolean(p.thumb_file_id));
   return {
     id: p.id,
     eventId: p.event_id,
@@ -38,6 +43,8 @@ export function serializePhoto(p: PhotoRow) {
     uploaderId: p.uploader_id,
     uploaderName: p.uploader_name ?? null,
     source: p.source,
+    mediaType: p.media_type ?? "image",
+    durationMs: p.duration_ms ?? null,
     originalName: p.original_name,
     sizeBytes: p.size_bytes,
     width: p.width,
@@ -52,8 +59,8 @@ export function serializePhoto(p: PhotoRow) {
     favorite: Boolean(p.favorite),
     /** Only the viewer's own people (self / family) — never other guests. */
     people: p.people ?? [],
-    thumbUrl: ready ? photoUrl(p.id, "thumb") : null,
-    previewUrl: ready ? photoUrl(p.id, "preview") : null,
+    thumbUrl: previews ? photoUrl(p.id, "thumb") : null,
+    previewUrl: previews ? photoUrl(p.id, "preview") : null,
     originalUrl: ready ? photoUrl(p.id, "original") : null,
   };
 }

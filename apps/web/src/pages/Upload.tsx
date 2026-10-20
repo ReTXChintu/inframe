@@ -1,15 +1,16 @@
 import { useRef, useState, type DragEvent } from "react";
 import { Link, useParams } from "react-router";
-import { ArrowLeft, CheckCircle2, CircleAlert, ImagePlus, RotateCcw, ScanFace, UploadCloud } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleAlert, Film, ImagePlus, RotateCcw, ScanFace, UploadCloud } from "lucide-react";
 import { formatBytes, plural, PROVIDER_LABEL } from "@/lib/format";
-import { addFiles, cancelQueued, clearFinished, retry, useUploads, type UploadItem } from "@/lib/uploads";
-import { useFeedback } from "@/components/feedback";
-import { Badge, Button, Card, cx, EmptyState, LinkButton, SelectField } from "@/components/ui";
+import { addFiles, cancelQueued, clearFinished, fileKey, findDuplicates, isVideoFile, retry, useUploads, type UploadItem } from "@/lib/uploads";
+import { errorMessage, useFeedback } from "@/components/feedback";
+import { Badge, Button, Card, cx, EmptyState, LinkButton, Modal, SelectField } from "@/components/ui";
 import { useEvent } from "./Event";
 import { LoadingBlock } from "./Events";
 
-const ACCEPT = "image/*,.heic,.heif";
-const isImage = (f: File) => f.type.startsWith("image/") || /\.(heic|heif|jpe?g|png|webp|gif|avif|tiff?)$/i.test(f.name);
+const ACCEPT = "image/*,video/*,.heic,.heif";
+const isImage = (f: File) => f.type.startsWith("image/") || /\.(heic|heif|jpe?g|png|webp|gif|avif|tiff?|bmp|dng)$/i.test(f.name);
+const isMedia = (f: File) => isImage(f) || isVideoFile(f);
 
 export function UploadPage() {
   const { id } = useParams();
@@ -19,6 +20,9 @@ export function UploadPage() {
   const input = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
   const [folderId, setFolderId] = useState<string>("");
+  const [checking, setChecking] = useState(false);
+  // Files that look like ones already in the event, waiting on "skip or upload anyway".
+  const [dupes, setDupes] = useState<{ files: File[]; keys: Set<string> } | null>(null);
 
   if (isLoading) return <LoadingBlock />;
   if (!event) return <EmptyState icon={<UploadCloud className="size-8" />} title="Event not found" />;
@@ -33,18 +37,39 @@ export function UploadPage() {
     );
   }
 
-  function take(list: FileList | null) {
+  async function take(list: FileList | null) {
     if (!list?.length) return;
     const files = [...list];
-    const images = files.filter(isImage);
-    if (images.length < files.length) toast(`Skipped ${plural(files.length - images.length, "file")} that aren't photos.`, "info");
-    if (images.length) addFiles(event!.id, images, folderId || null);
+    const media = files.filter(isMedia);
+    if (media.length < files.length) toast(`Skipped ${plural(files.length - media.length, "file")} that aren't photos or videos.`, "info");
+    if (!media.length) return;
+    setChecking(true);
+    try {
+      // Same name + size + last-modified as something already in the event = the same file, most likely.
+      const keys = await findDuplicates(event!.id, media);
+      if (media.some((f) => keys.has(fileKey(f)))) setDupes({ files: media, keys });
+      else addFiles(event!.id, media, folderId || null);
+    } catch (err) {
+      toast(errorMessage(err), "error");
+    } finally {
+      setChecking(false);
+    }
   }
+
+  function settleDupes(skip: boolean) {
+    if (!dupes) return;
+    const files = skip ? dupes.files.filter((f) => !dupes.keys.has(fileKey(f))) : dupes.files;
+    if (files.length) addFiles(event!.id, files, folderId || null);
+    else toast("Nothing new to upload — they're all here already.", "info");
+    setDupes(null);
+  }
+
+  const dupeList = dupes ? dupes.files.filter((f) => dupes.keys.has(fileKey(f))) : [];
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setDrag(false);
-    take(e.dataTransfer.files);
+    void take(e.dataTransfer.files);
   };
 
   const count = (pred: (x: UploadItem) => boolean) => items.filter(pred).length;
@@ -61,10 +86,11 @@ export function UploadPage() {
           <Link to={`/events/${event.id}`} className="inline-flex items-center gap-1.5 text-[14px] text-muted hover:text-ink">
             <ArrowLeft className="size-4" /> {event.name}
           </Link>
-          <h1 className="mt-2 text-3xl font-semibold">Add photos</h1>
+          <h1 className="mt-2 text-3xl font-semibold">Add photos & videos</h1>
           <p className="mt-1.5 text-[15px] text-muted">
             Originals are saved to {event.storage.folderName ? `“${event.storage.folderName}” in ` : ""}
-            {event.storage.provider ? PROVIDER_LABEL[event.storage.provider] : "storage"}. Faces are matched as each one arrives.
+            {event.storage.provider ? PROVIDER_LABEL[event.storage.provider] : "storage"}. Photos are scanned for faces; videos are
+            stored as they are. Once a file shows “Queued on server”, you can close this tab.
           </p>
         </div>
         {items.length > 0 && done + failed === items.length && (
@@ -90,9 +116,19 @@ export function UploadPage() {
         )}
       >
         <ImagePlus className="size-10" strokeWidth={1.5} />
-        <span className="text-lg font-semibold">Drop photos here, or tap to choose</span>
-        <span className="text-[14px] text-muted">JPG, PNG, HEIC and more · as many as you like</span>
-        <input ref={input} type="file" accept={ACCEPT} multiple className="sr-only" onChange={(e) => { take(e.target.files); e.target.value = ""; }} />
+        <span className="text-lg font-semibold">{checking ? "Checking for duplicates…" : "Drop photos and videos here, or tap to choose"}</span>
+        <span className="text-[14px] text-muted">JPG, PNG, HEIC, MP4, MOV and more · as many as you like</span>
+        <input
+          ref={input}
+          type="file"
+          accept={ACCEPT}
+          multiple
+          className="sr-only"
+          onChange={(e) => {
+            const el = e.currentTarget;
+            void take(el.files).finally(() => (el.value = ""));
+          }}
+        />
       </label>
 
       {event.can.viewAll && event.folders.length > 0 && (
@@ -109,14 +145,14 @@ export function UploadPage() {
 
       {items.length === 0 ? (
         <div className="hidden h-full min-h-[340px] items-center justify-center rounded-[22px] border border-line bg-surface p-8 text-center text-[15px] text-muted lg:flex">
-          Each photo shows up here with its progress — uploading, saving to storage, finding faces.
+          Each file shows up here with its progress — uploading, saving to storage, finding faces.
         </div>
       ) : (
         <Card>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line px-5 py-4 text-[14px]">
             <Stat label="selected" value={items.length} />
             <Stat label="uploaded" value={uploaded} />
-            <Stat label="scanned" value={done} />
+            <Stat label="finished" value={done} />
             <Stat label="with you or family" value={matched} accent />
             {failed > 0 && <Stat label="failed" value={failed} danger />}
             <div className="ml-auto flex gap-2">
@@ -140,6 +176,36 @@ export function UploadPage() {
         </Card>
       )}
       </div>
+
+      <Modal
+        open={!!dupes}
+        onClose={() => setDupes(null)}
+        title={`${plural(dupeList.length, "file")} already here`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDupes(null)}>
+              Cancel
+            </Button>
+            <Button variant="secondary" onClick={() => settleDupes(false)}>
+              Upload anyway
+            </Button>
+            <Button onClick={() => settleDupes(true)}>Skip duplicates</Button>
+          </>
+        }
+      >
+        <p className="text-[15px] text-muted">
+          {dupeList.length === dupes?.files.length ? "All of them have" : `${dupeList.length} of ${dupes?.files.length} have`} the same
+          name, size and date as files already in this event (or already uploading).
+        </p>
+        <ul className="mt-3 max-h-56 divide-y divide-line overflow-y-auto rounded-xl border border-line text-[14px]">
+          {dupeList.slice(0, 200).map((f) => (
+            <li key={fileKey(f)} className="flex justify-between gap-3 px-3 py-2">
+              <span className="min-w-0 truncate">{f.name}</span>
+              <span className="shrink-0 text-muted">{formatBytes(f.size)}</span>
+            </li>
+          ))}
+        </ul>
+      </Modal>
     </div>
   );
 }
@@ -159,8 +225,10 @@ function UploadRow({ item }: { item: UploadItem }) {
         return <Badge>Waiting</Badge>;
       case "uploading":
         return <Badge tone="neutral">Uploading {Math.round(item.progress * 100)}%</Badge>;
+      case "received":
+        return <Badge tone="neutral">Queued on server</Badge>;
       case "processing":
-        return <Badge tone="neutral">Processing…</Badge>;
+        return <Badge tone="neutral">Making previews…</Badge>;
       case "storing":
         return <Badge tone="neutral">Saving to storage…</Badge>;
       case "finding-faces":
@@ -170,6 +238,7 @@ function UploadRow({ item }: { item: UploadItem }) {
           </Badge>
         );
       case "done":
+        if (item.isVideo) return <Badge tone="ok"><CheckCircle2 className="size-3.5" /> Stored</Badge>;
         if (item.error) return <Badge tone="warn">Saved · face scan failed</Badge>;
         if (item.matchCount > 0) return <Badge tone="accent"><CheckCircle2 className="size-3.5" /> Matched</Badge>;
         return <Badge tone="ok">{item.faceCount ? plural(item.faceCount, "face") : "No faces"}</Badge>;
@@ -180,8 +249,8 @@ function UploadRow({ item }: { item: UploadItem }) {
 
   return (
     <li className="flex items-center gap-3 px-5 py-3">
-      <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-surface-2">
-        {item.previewUrl && <img src={item.previewUrl} alt="" className="size-full object-cover" />}
+      <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-2 text-muted">
+        {item.previewUrl ? <img src={item.previewUrl} alt="" className="size-full object-cover" /> : item.isVideo && <Film className="size-5" />}
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[14px] font-medium">{item.file.name}</p>

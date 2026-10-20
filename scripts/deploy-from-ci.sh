@@ -12,7 +12,7 @@
 set -euo pipefail
 
 APP_DIR="${INFRAME_DIR:-/opt/var/inframe}"
-PM2_NAME="${INFRAME_PM2_NAME:-inframe}"
+
 PUBLIC="$APP_DIR/apps/web/public"
 
 read -r action version build extra <<<"${SSH_ORIGINAL_COMMAND:-}" || true
@@ -58,7 +58,9 @@ echo "==> installing and building"
 npm ci --no-audit --no-fund --loglevel=error
 npm run build --silent
 
-echo "==> restarting $PM2_NAME"
-pm2 restart "$PM2_NAME" --update-env >/dev/null
+echo "==> restarting the API and workers"
+# ecosystem.config.cjs defines both processes ("inframe" + "inframe-worker"); this
+# starts whichever isn't running yet and reloads the rest.
+pm2 startOrReload ecosystem.config.cjs --update-env >/dev/null
 pm2 save >/dev/null
 echo "deployed InFrame $version (build $build)"

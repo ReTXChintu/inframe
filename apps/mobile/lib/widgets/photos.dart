@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:gal/gal.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:video_player/video_player.dart';
 
 import '../api/api.dart';
 import '../api/models.dart';
@@ -117,6 +120,22 @@ class PhotoGridSliver extends StatelessWidget {
                   child: NetImage(photo.thumbUrl, cacheKey: '${photo.id}:thumb'),
                 ),
               ),
+              if (photo.isVideo)
+                Positioned(
+                  right: 4,
+                  top: 4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(99)),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.play_arrow_rounded, size: 13, color: Colors.white),
+                      Text(
+                        photo.durationMs != null ? formatDuration(Duration(milliseconds: photo.durationMs!)) : 'Video',
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
+                      ),
+                    ]),
+                  ),
+                ),
               if (showEvent && photo.eventName != null)
                 Positioned(
                   left: 0,
@@ -200,11 +219,23 @@ Future<void> saveToGallery(BuildContext context, List<Photo> photos) async {
     var saved = 0;
     for (final p in photos) {
       if (p.originalUrl == null) continue;
-      final bytes = await api.bytes(p.originalUrl!);
-      await Gal.putImageBytes(Uint8List.fromList(bytes), album: 'InFrame', name: p.originalName.replaceAll(RegExp(r'\.[^.]+$'), ''));
+      if (p.isVideo) {
+        // Videos can be big: stream to a temp file instead of holding them in memory.
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/${p.id}-${p.originalName.replaceAll(RegExp(r'[^\w.\-]'), '_')}');
+        try {
+          await api.downloadTo(p.originalUrl!, file.path);
+          await Gal.putVideo(file.path, album: 'InFrame');
+        } finally {
+          if (await file.exists()) await file.delete();
+        }
+      } else {
+        final bytes = await api.bytes(p.originalUrl!);
+        await Gal.putImageBytes(Uint8List.fromList(bytes), album: 'InFrame', name: p.originalName.replaceAll(RegExp(r'\.[^.]+$'), ''));
+      }
       saved++;
     }
-    if (context.mounted) toast(context, 'Saved ${plural(saved, 'photo')} to your gallery.');
+    if (context.mounted) toast(context, 'Saved ${plural(saved, 'file')} to your gallery.');
   } catch (e) {
     if (context.mounted) toast(context, e is ApiException ? e.message : "Couldn't save to the gallery.", error: true);
   }
@@ -285,7 +316,16 @@ class _PhotoViewerState extends State<PhotoViewer> {
           ('Added by', photo.uploaderName ?? 'Storage folder'),
           if (photo.folderName != null) ('Album', photo.folderName!),
           ('Size', '${photo.width != null ? '${photo.width} × ${photo.height} · ' : ''}${formatBytes(photo.sizeBytes)}'),
-          ('Faces', photo.faceStatus == 'done' ? '${photo.faceCount}' : photo.faceStatus == 'failed' ? "Couldn't scan" : 'Scanning…'),
+          if (photo.isVideo && photo.durationMs != null) ('Length', formatDuration(Duration(milliseconds: photo.durationMs!))),
+          (
+            'Faces',
+            switch (photo.faceStatus) {
+              'skipped' => 'Not scanned (video)',
+              'done' => '${photo.faceCount}',
+              'failed' => "Couldn't scan",
+              _ => 'Scanning…',
+            }
+          ),
         ];
         return Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
@@ -330,6 +370,14 @@ class _PhotoViewerState extends State<PhotoViewer> {
           },
           itemBuilder: (_, i) {
             final item = feed.items[i];
+            if (item.isVideo) {
+              return _VideoPage(
+                key: ValueKey(item.id),
+                photo: item,
+                active: i == _index,
+                onTap: () => setState(() => _chrome = !_chrome),
+              );
+            }
             return GestureDetector(
               onTap: () => setState(() => _chrome = !_chrome),
               child: InteractiveViewer(
@@ -372,6 +420,117 @@ class _PhotoViewerState extends State<PhotoViewer> {
             ),
           ),
         ),
+      ]),
+    );
+  }
+}
+
+/// A video in the viewer: poster first, then streams the original (seeking
+/// works through HTTP ranges) once the user taps play.
+class _VideoPage extends StatefulWidget {
+  const _VideoPage({super.key, required this.photo, required this.active, required this.onTap});
+  final Photo photo;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  State<_VideoPage> createState() => _VideoPageState();
+}
+
+class _VideoPageState extends State<_VideoPage> {
+  VideoPlayerController? _video;
+  bool _failed = false;
+
+  @override
+  void didUpdateWidget(_VideoPage old) {
+    super.didUpdateWidget(old);
+    // Swiped away: stop, and free the decoder.
+    if (!widget.active && _video != null) {
+      _video!.dispose();
+      _video = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _video?.dispose();
+    super.dispose();
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _play() async {
+    final url = widget.photo.originalUrl;
+    if (url == null) return;
+    final c = VideoPlayerController.networkUrl(Uri.parse(api.resolve(url)));
+    setState(() {
+      _video = c;
+      _failed = false;
+    });
+    try {
+      await c.initialize();
+      c.addListener(_changed);
+      await c.play();
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+    }
+    _changed();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _video;
+    final ready = c != null && c.value.isInitialized;
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: Stack(alignment: Alignment.center, children: [
+        if (ready)
+          Center(child: AspectRatio(aspectRatio: c.value.aspectRatio, child: VideoPlayer(c)))
+        else
+          Positioned.fill(child: NetImage(widget.photo.previewUrl, cacheKey: '${widget.photo.id}:preview', fit: BoxFit.contain)),
+        if (_failed)
+          const Text("Couldn't play this video.", style: TextStyle(color: Colors.white70))
+        else if (c != null && !ready)
+          const CircularProgressIndicator(color: Colors.white70)
+        else if (!ready || !c.value.isPlaying)
+          IconButton.filled(
+            iconSize: 44,
+            style: IconButton.styleFrom(backgroundColor: Colors.black54, foregroundColor: Colors.white),
+            tooltip: 'Play',
+            icon: const Icon(Icons.play_arrow_rounded),
+            onPressed: widget.photo.originalUrl == null ? null : () => ready ? c.play() : _play(),
+          ),
+        if (ready)
+          Positioned(
+            left: 8,
+            right: 16,
+            bottom: 72,
+            child: SafeArea(
+              child: Row(children: [
+                IconButton(
+                  color: Colors.white,
+                  tooltip: c.value.isPlaying ? 'Pause' : 'Play',
+                  icon: Icon(c.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                  onPressed: () => c.value.isPlaying ? c.pause() : c.play(),
+                ),
+                Expanded(
+                  child: VideoProgressIndicator(
+                    c,
+                    allowScrubbing: true,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    colors: VideoProgressColors(playedColor: Palette.dark.accent, bufferedColor: Colors.white38, backgroundColor: Colors.white12),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '${formatDuration(c.value.position)} / ${formatDuration(c.value.duration)}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12, fontFeatures: [FontFeature.tabularFigures()]),
+                ),
+              ]),
+            ),
+          ),
       ]),
     );
   }

@@ -1,18 +1,15 @@
-import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { config } from "../config.js";
 import { requireUser } from "../auth/guard.js";
 import { one, query } from "../db/pool.js";
-import { AppError, badRequest, forbidden, notFound, parse } from "../lib/errors.js";
-import { looksLikeImage } from "../lib/images.js";
-import { stashOriginal } from "../lib/media-cache.js";
+import { badRequest, forbidden, notFound, parse } from "../lib/errors.js";
+import { removeSpool, spoolExists } from "../lib/spool.js";
 import { enqueueFaces, enqueueIngest } from "../jobs/queue.js";
 import { trashDerivatives } from "../jobs/workers.js";
 import { toEvent } from "../realtime/io.js";
 import { eventAccess, ownPhotoPredicate } from "../services/access.js";
 import { listPhotos, PHOTO_COLUMNS, PHOTO_JOINS, serializePhoto, type PhotoRow } from "../services/photos.js";
-import { eventStorage, markConnection, StorageError } from "../storage/index.js";
+import { eventStorage, StorageError } from "../storage/index.js";
 import { parseId } from "./shared.js";
 import { createZipTicket } from "./media.js";
 
@@ -34,13 +31,14 @@ interface VisibleRow {
   storage_file_id: string | null;
   thumb_file_id: string | null;
   preview_file_id: string | null;
+  spool_path: string | null;
   role: "owner" | "cohost" | "member";
 }
 
 /** The subset of `ids` the user may see (with their role in each photo's event). */
 async function visiblePhotos(userId: string, ids: string[]): Promise<VisibleRow[]> {
   return query<VisibleRow>(
-    `SELECT p.id, p.event_id, p.uploader_id, p.storage_file_id, p.thumb_file_id, p.preview_file_id, m.role
+    `SELECT p.id, p.event_id, p.uploader_id, p.storage_file_id, p.thumb_file_id, p.preview_file_id, p.spool_path, m.role
        FROM photos p
        JOIN events e ON e.id = p.event_id
        JOIN event_members m ON m.event_id = p.event_id AND m.user_id = $1
@@ -48,12 +46,6 @@ async function visiblePhotos(userId: string, ids: string[]): Promise<VisibleRow[
         AND (m.role <> 'member' OR e.guests_see_all OR ${ownPhotoPredicate("$1")})`,
     [userId, ids],
   );
-}
-
-/** Make an uploaded file name safe to store in Drive/MEGA. */
-function cleanName(name: string | undefined) {
-  const base = path.basename(name || "photo.jpg").replace(/[\u0000-\u001f<>:"/\\|?*]+/g, "_").trim();
-  return (base || "photo.jpg").slice(0, 180);
 }
 
 export async function photoRoutes(app: FastifyInstance) {
@@ -112,69 +104,6 @@ export async function photoRoutes(app: FastifyInstance) {
       limit: q.limit,
       order: q.order,
     });
-  });
-
-  /**
-   * One file per request, so the browser gets byte-level progress per photo.
-   * The file is held in memory and written straight into the event's
-   * Drive/MEGA folder (or its album's sub-folder) before we answer — nothing
-   * touches the server's disk. Thumbnails/faces follow in the background.
-   */
-  app.post("/api/events/:id/photos", async (req, reply) => {
-    const eventId = parseId(req.params);
-    const access = await eventAccess(eventId, req.user.id);
-    if (!access.canUpload) throw forbidden("Only the hosts can add photos to this event.");
-    if (!access.event.storage_folder_id || !access.event.storage_connection_id) {
-      throw badRequest("This event has no storage folder connected yet.");
-    }
-    const { folderId } = parse(z.object({ folderId: z.string().uuid().optional() }), req.query);
-    const album = folderId
-      ? await one<{ id: string; name: string; storage_folder_id: string | null }>(
-          "SELECT id, name, storage_folder_id FROM folders WHERE id = $1 AND event_id = $2",
-          [folderId, eventId],
-        )
-      : undefined;
-    if (folderId && !album) throw badRequest("That album isn't in this event.");
-
-    const file = await req.file({ limits: { fileSize: config.maxUploadBytes, files: 1 } });
-    if (!file) throw badRequest("Attach a photo.");
-    const name = cleanName(file.filename);
-    if (!looksLikeImage(name, file.mimetype)) {
-      file.file.resume();
-      throw badRequest(`${name} isn't a photo.`);
-    }
-    let data: Buffer;
-    try {
-      data = await file.toBuffer();
-    } catch {
-      throw new AppError(413, "too_large", `${name} is larger than ${config.MAX_UPLOAD_MB} MB.`);
-    }
-    const mime = file.mimetype && file.mimetype !== "application/octet-stream" ? file.mimetype : "image/jpeg";
-
-    const { provider, folderId: rootId, conn } = await eventStorage(eventId);
-    let parentId = rootId;
-    let fileId: string;
-    try {
-      if (album) {
-        parentId = album.storage_folder_id ?? (await provider.ensureSubfolder(rootId, album.name));
-        if (!album.storage_folder_id) await query("UPDATE folders SET storage_folder_id = $2 WHERE id = $1", [album.id, parentId]);
-      }
-      fileId = await provider.upload(parentId, name, mime, data);
-    } catch (err) {
-      await markConnection(conn.id, err);
-      throw err;
-    }
-
-    const row = await one<PhotoRow>(
-      `INSERT INTO photos (event_id, folder_id, uploader_id, source, original_name, mime_type, size_bytes,
-                           storage_file_id, storage_parent_id)
-       VALUES ($1, $2, $3, 'upload', $4, $5, $6, $7, $8) RETURNING *`,
-      [eventId, album?.id ?? null, req.user.id, name, mime, data.length, fileId, parentId],
-    );
-    stashOriginal(row!.id, data);
-    await enqueueIngest({ photoId: row!.id });
-    reply.code(202);
-    return { photo: serializePhoto(row!) };
   });
 
   app.get("/api/photos/:id", async (req) => {
@@ -239,6 +168,7 @@ export async function photoRoutes(app: FastifyInstance) {
         try {
           if (storage && p.storage_file_id) await storage.provider.trash(p.storage_file_id);
           await trashDerivatives(storage?.provider ?? null, p);
+          await removeSpool(p.spool_path); // still waiting to be stored
           deleted.push(p.id);
         } catch (err) {
           failed.push({ id: p.id, error: err instanceof StorageError ? err.message : "Couldn't delete from storage." });
@@ -261,8 +191,15 @@ export async function photoRoutes(app: FastifyInstance) {
     if (!photo) throw notFound("Photo");
     const access = await eventAccess(photo.event_id, req.user.id);
     if (!access.isHost && photo.uploader_id !== req.user.id) throw forbidden();
-    // The original is always already in storage, so any step can simply re-run.
     if (photo.status === "failed") {
+      // An upload that never reached storage needs its copy still waiting on the server.
+      const row = await one<{ storage_file_id: string | null; spool_path: string | null }>(
+        "SELECT storage_file_id, spool_path FROM photos WHERE id = $1",
+        [id],
+      );
+      if (!row?.storage_file_id && !spoolExists(row?.spool_path)) {
+        throw badRequest("This upload can't be retried — add the file again.");
+      }
       await query("UPDATE photos SET status = 'pending', error = NULL WHERE id = $1", [id]);
       await enqueueIngest({ photoId: id });
     } else if (photo.face_status === "failed") {
@@ -276,7 +213,7 @@ export async function photoRoutes(app: FastifyInstance) {
   app.post("/api/photos/status", async (req) => {
     const body = parse(idsBody, req.body);
     const rows = await query(
-      `SELECT p.id, p.status, p.face_status AS "faceStatus", p.face_count AS "faceCount", p.error,
+      `SELECT p.id, p.status, p.media_type AS "mediaType", p.face_status AS "faceStatus", p.face_count AS "faceCount", p.error,
               (SELECT count(*)::int FROM photo_matches pm WHERE pm.photo_id = p.id) AS "matchCount"
          FROM photos p WHERE p.id = ANY($1::uuid[]) AND p.uploader_id = $2`,
       [body.photoIds, req.user.id],
