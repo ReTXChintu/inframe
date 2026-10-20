@@ -141,7 +141,11 @@ export class MegaProvider implements StorageProvider {
 
   async upload(folderId: string, name: string, _mimeType: string, data: Buffer): Promise<string> {
     const folder = await this.node(folderId);
-    const file = await call<MutableFile>((cb) => folder.upload({ name, size: data.length }, data, cb));
+    // megajs encrypts the buffer it's given IN PLACE (cipher.update(buf).copy(buf)) for
+    // uploads that fit in one chunk. Hand it a copy, or the caller's bytes — which we
+    // keep in the thumbnail cache and pass on to face detection — become ciphertext.
+    const copy = Buffer.from(data);
+    const file = await call<MutableFile>((cb) => folder.upload({ name, size: copy.length }, copy, cb));
     return file.nodeId!;
   }
 
