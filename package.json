@@ -12,7 +12,11 @@
     "db:migrate": "npm run db:migrate -w apps/server",
     "build": "npm run build -w apps/web && npm run build -w apps/server",
     "start": "npm run start -w apps/server",
-    "typecheck": "npm run typecheck -w apps/server && npm run typecheck -w apps/web"
+    "typecheck": "npm run typecheck -w apps/server && npm run typecheck -w apps/web",
+    "release": "node scripts/release.mjs",
+    "release:patch": "node scripts/release.mjs patch",
+    "release:minor": "node scripts/release.mjs minor",
+    "release:major": "node scripts/release.mjs major"
   },
   "devDependencies": {
     "concurrently": "^9.2.5"

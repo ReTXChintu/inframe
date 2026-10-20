@@ -156,9 +156,22 @@ cd apps/mobile
 flutter run --dart-define=API_BASE_URL=http://<server>:<port>     # on a phone or emulator
 ```
 
+### Releasing
+One command bumps **every app to the same version**: root, server, web, `package-lock.json`, and the mobile `pubspec.yaml` (where the build number goes up by one). It then commits, tags `vX.Y.Z` and pushes:
+
+```bash
+npm run release:patch     # 0.1.0 → 0.1.1   (fixes)
+npm run release:minor     # 0.1.0 → 0.2.0   (features)
+npm run release:major     # 0.1.0 → 1.0.0
+npm run release -- 1.0.0  # exact version
+# add  -- --dry-run  to preview, -- --no-push to tag locally only
+```
+
+It refuses to run off `main`, with uncommitted changes, when behind `origin/main`, or if the tag already exists.
+
 ### Releases → APK on the server
-`.github/workflows/android-release.yml` runs on every **published GitHub release**:
-1. Builds a signed APK (version = release tag, build number = run number) and attaches it to the release.
+`.github/workflows/android-release.yml` runs on every **pushed `v*` tag** (as above) or **release published on GitHub**:
+1. Builds a signed APK (version = tag, build number = run number), creates the GitHub release if it doesn't exist, and attaches the APK.
 2. Streams it over SSH to the server, where the deploy key can only run `scripts/deploy-from-ci.sh`.
 3. That script saves it as `apps/web/public/inframe.apk` with `app-version.json`, runs `git pull`, then `npm ci`, `npm run build`, and `pm2 restart inframe`.
 

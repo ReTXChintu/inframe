@@ -1,7 +1,12 @@
-# Builds the signed Android APK on every published GitHub release, attaches it
-# to the release, then ships it to the server: the APK lands in
-# apps/web/public (served at /inframe.apk), the server pulls the code,
-# rebuilds and restarts its pm2 process.
+# Builds the signed Android APK for every release, attaches it to the GitHub
+# release, then ships it to the server: the APK lands in apps/web/public
+# (served at /inframe.apk), the server pulls the code, rebuilds and restarts
+# its pm2 process.
+#
+# Two ways to release:
+#   • `npm run release:patch|minor|major` — bumps every app's version, pushes a
+#     vX.Y.Z tag; this workflow then creates the GitHub release itself.
+#   • Publish a release on GitHub (Releases → Draft a new release).
 #
 # Run it manually (Actions → Android release → Run workflow) to build a test
 # APK as a downloadable artifact without deploying.
@@ -15,16 +20,22 @@
 name: Android release
 
 on:
+  push:
+    tags: ["v*.*.*"]
   release:
     types: [published]
   workflow_dispatch:
 
 permissions:
-  contents: write # attach the APK to the release
+  contents: write # create the release and attach the APK
 
+# One run per version at a time (a release made in the GitHub UI can fire both triggers).
 concurrency:
-  group: android-release
+  group: android-release-${{ github.ref_name }}
   cancel-in-progress: false
+
+env:
+  IS_RELEASE: ${{ github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') }}
 
 jobs:
   build:
@@ -57,7 +68,7 @@ jobs:
       - name: Version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
+          if [ "$IS_RELEASE" = "true" ]; then
             name="${GITHUB_REF_NAME#v}"
           else
             name="0.0.0-dev.${GITHUB_RUN_NUMBER}"
@@ -89,7 +100,7 @@ jobs:
           } > android/key.properties
 
       - name: Refuse unsigned releases
-        if: github.event_name == 'release' && env.HAS_KEYSTORE != 'true'
+        if: env.IS_RELEASE == 'true' && env.HAS_KEYSTORE != 'true'
         run: |
           echo "::error::ANDROID_KEYSTORE_BASE64 is not set — a release APK must be signed with the InFrame key so phones can update it."
           exit 1
@@ -111,17 +122,23 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Attach to the release
-        if: github.event_name == 'release'
+      - name: Create / update the GitHub release
+        if: env.IS_RELEASE == 'true'
         working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" "inframe-${{ steps.version.outputs.name }}.apk" --clobber
+        run: |
+          # A pushed tag (npm run release:*) has no release yet: create it with generated notes.
+          # Releases created by GITHUB_TOKEN don't trigger this workflow again.
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "InFrame $GITHUB_REF_NAME"
+          fi
+          gh release upload "$GITHUB_REF_NAME" "inframe-${{ steps.version.outputs.name }}.apk" --clobber
 
   deploy:
     name: Deploy to server
     needs: build
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
