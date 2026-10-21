@@ -25,7 +25,14 @@ import { uploadRoutes } from "./routes/uploads.js";
  * directly.
  */
 export async function buildApp(opts: { logger?: FastifyServerOptions["logger"] } = {}) {
+  // HTTPS straight from Node when a certificate is configured: sign-in and
+  // the Secure session cookies need it, and nothing sits in front of us.
+  const tls =
+    config.SSL_CERT_PATH && config.SSL_KEY_PATH
+      ? { https: { cert: fs.readFileSync(config.SSL_CERT_PATH), key: fs.readFileSync(config.SSL_KEY_PATH) } }
+      : {};
   const app = Fastify({
+    ...tls,
     logger: opts.logger ?? {
       level: config.isProd ? "info" : "debug",
       transport: undefined,

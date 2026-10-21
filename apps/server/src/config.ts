@@ -19,6 +19,13 @@ const schema = z.object({
   NODE_ENV: z.string().default("development"),
   APP_URL: z.string().url().default("http://localhost:5173"),
   PORT: z.coerce.number().int().default(4000),
+  /**
+   * Serve HTTPS directly, with no proxy in front: the certificate and key
+   * files (e.g. Let's Encrypt's fullchain.pem and privkey.pem). Both or
+   * neither; without them the server speaks plain HTTP.
+   */
+  SSL_CERT_PATH: z.string().optional(),
+  SSL_KEY_PATH: z.string().optional(),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 characters"),
   ENCRYPTION_KEY: z.string().min(16, "ENCRYPTION_KEY must be at least 16 characters"),
