@@ -2,12 +2,12 @@ import { copyText } from "@/lib/clipboard";
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
-import { Check, Copy, Download, Send, Share2 } from "lucide-react";
+import { Check, Copy, Download, Lock, Send, Share2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { KIND_LABEL, plural, prettyCode } from "@/lib/format";
 import type { EventDetail } from "@/lib/types";
 import { errorMessage, useFeedback } from "./feedback";
-import { Button, Modal, SelectField } from "./ui";
+import { Button, Callout, cx, Modal, SelectField } from "./ui";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -24,7 +24,7 @@ export function ShareSheet({ event, open, onClose }: { event: EventDetail; open:
 
   useEffect(() => {
     if (!open || !link) return;
-    QRCode.toDataURL(link, { margin: 1, width: 640, errorCorrectionLevel: "M", color: { dark: "#17161b", light: "#ffffff" } })
+    QRCode.toDataURL(link, { margin: 1, width: 640, errorCorrectionLevel: "M", color: { dark: "#18191d", light: "#ffffff" } })
       .then(setQr)
       .catch(() => setQr(null));
   }, [open, link]);
@@ -66,23 +66,24 @@ export function ShareSheet({ event, open, onClose }: { event: EventDetail; open:
       <div className="flex flex-col gap-6">
         {link && code ? (
           <div className="grid gap-5 sm:grid-cols-[180px_1fr] sm:items-center">
-            <div className="frame mx-auto w-[180px] rounded-2xl bg-white p-3 text-ink [--frame-inset:-4px] [--frame-len:22px]">
-              {qr ? <img src={qr} alt={`QR code to join ${event.name}`} className="w-full" /> : <div className="aspect-square skeleton rounded" />}
+            {/* The QR stays black on white in both themes so every camera can read it. */}
+            <div className="mx-auto w-[180px] rounded-xl border border-ln bg-white p-3">
+              {qr ? <img src={qr} alt={`QR code to join ${event.name}`} className="w-full" /> : <div className="aspect-square skeleton rounded-sm" />}
             </div>
             <div className="flex min-w-0 flex-col gap-3">
               <div>
-                <p className="text-[12px] font-medium tracking-[0.12em] text-muted uppercase">Join code</p>
+                <p className="text-label text-tx2">Join code</p>
                 <button
                   onClick={() => copy(code, "code")}
-                  className="mt-1 inline-flex items-center gap-2 font-display text-3xl font-semibold tracking-[0.08em] tabular-nums hover:text-accent"
+                  className="mt-1 inline-flex items-center gap-2 rounded-md font-mono text-[28px] leading-[34px] font-medium tracking-[0.08em] text-tx transition-colors hover:text-ac"
                   aria-label={`Copy code ${prettyCode(code)}`}
                 >
                   {prettyCode(code)}
-                  {copied === "code" ? <Check className="size-5 text-ok" /> : <Copy className="size-5 text-muted" />}
+                  {copied === "code" ? <Check className="size-5 text-good" /> : <Copy className="size-5 text-tx3" />}
                 </button>
               </div>
-              <div className="flex items-center gap-2 rounded-xl border border-line bg-surface-2 p-1 pl-3">
-                <span className="min-w-0 flex-1 truncate text-[13px] text-ink-2">{link}</span>
+              <div className="flex items-center gap-2 rounded-md border border-ln2 bg-sf2 p-1 pl-3">
+                <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-tx2">{link}</span>
                 <Button size="sm" variant="secondary" icon={copied === "link" ? <Check className="size-4" /> : <Copy className="size-4" />} onClick={() => copy(link, "link")}>
                   {copied === "link" ? "Copied" : "Copy"}
                 </Button>
@@ -107,22 +108,22 @@ export function ShareSheet({ event, open, onClose }: { event: EventDetail; open:
             </div>
           </div>
         ) : (
-          <p className="rounded-xl bg-surface-2 p-4 text-[14px] text-muted">
+          <Callout tone="neutral" icon={<Lock />}>
             Joining with a code is turned off for this {KIND_LABEL[event.kind].toLowerCase()}. {event.isHost ? "Turn it on in settings, or invite people by email below." : "Ask a host to invite you."}
-          </p>
+          </Callout>
         )}
 
         {event.isHost && (
           <form
-            className="flex flex-col gap-3 border-t border-line pt-5"
+            className="flex flex-col gap-3 border-t border-ln pt-5"
             onSubmit={(e) => {
               e.preventDefault();
               if (parsed.length && !invalid.length) invite.mutate();
             }}
           >
             <div>
-              <h3 className="font-semibold">Invite by email</h3>
-              <p className="text-[13px] text-muted">They get a link to join. If they're new, they create an account first.</p>
+              <h3 className="text-title-card">Invite by email</h3>
+              <p className="mt-0.5 text-body-s text-tx3">They get a link to join. If they're new, they create an account first.</p>
             </div>
             <textarea
               value={emails}
@@ -130,9 +131,13 @@ export function ShareSheet({ event, open, onClose }: { event: EventDetail; open:
               rows={3}
               placeholder="priya@example.com, rahul@example.com"
               aria-label="Email addresses"
-              className="w-full resize-none rounded-xl border border-line bg-surface p-3 text-[15px] outline-none focus:border-ink"
+              aria-invalid={invalid.length > 0}
+              className={cx(
+                "w-full resize-none rounded-md border bg-sf px-3.5 py-3 text-[15px] text-tx outline-none placeholder:text-tx3 focus:border-2 focus:border-ac focus:px-[13px] focus:py-[11px]",
+                invalid.length > 0 ? "border-2 border-crit px-[13px] py-[11px]" : "border-ln2",
+              )}
             />
-            {invalid.length > 0 && <p className="text-[13px] text-danger">Check these: {invalid.join(", ")}</p>}
+            {invalid.length > 0 && <p className="text-caption text-crit">Check these: {invalid.join(", ")}</p>}
             <div className="flex flex-wrap items-end gap-3">
               {event.isOwner && (
                 <SelectField label="Invite as" value={role} onChange={(e) => setRole(e.target.value as "member" | "cohost")} className="w-44">
@@ -140,7 +145,7 @@ export function ShareSheet({ event, open, onClose }: { event: EventDetail; open:
                   <option value="cohost">Co-host</option>
                 </SelectField>
               )}
-              <Button type="submit" icon={<Send className="size-4" />} disabled={!parsed.length || invalid.length > 0} loading={invite.isPending} className="ml-auto">
+              <Button type="submit" size="lg" icon={<Send className="size-[18px]" />} disabled={!parsed.length || invalid.length > 0} loading={invite.isPending} className="ml-auto">
                 Send {parsed.length > 1 ? `${parsed.length} invites` : "invite"}
               </Button>
             </div>

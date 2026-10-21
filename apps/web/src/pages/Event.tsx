@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CalendarDays,
+  ChevronRight,
   Camera,
   FolderPlus,
   Images,
@@ -29,7 +30,7 @@ import { SelectionBar } from "@/components/SelectionBar";
 import { SelfieModal } from "@/components/SelfieCapture";
 import { ShareSheet } from "@/components/ShareSheet";
 import { StoragePendingBanner, storagePendingMessage, TrippinChip } from "@/components/Trippin";
-import { Button, cx, EmptyState, IconButton, Modal, Segmented, TextField, LinkButton } from "@/components/ui";
+import { Button, Callout, Chip, EmptyState, ErrorBanner, IconTile, LinkButton, Modal, Segmented, Spinner, TextField } from "@/components/ui";
 import { LoadingBlock } from "./Events";
 
 type View =
@@ -166,27 +167,34 @@ export function EventPage() {
 
       {event.can.faceSearch && (
         !self?.hasSelfie ? (
-          <div className="frame flex flex-col gap-4 rounded-[20px] bg-ink p-5 text-bg sm:flex-row sm:items-center sm:p-6 [--frame-color:var(--accent)] [--frame-inset:8px] animate-rise">
-            <ScanFace className="size-9 shrink-0 text-accent" aria-hidden />
-            <div className="min-w-0 flex-1">
-              <p className="text-lg font-semibold">Find the photos you're in</p>
-              <p className="text-[14px] text-bg/70">Take a quick selfie. InFrame checks every photo in this event — and every new one.</p>
-            </div>
-            <Button variant="accent" icon={<Camera className="size-4" />} onClick={() => setSelfieFor(self ?? null)} disabled={!self}>
-              Take a selfie
-            </Button>
-          </div>
+          <Callout
+            tone="info"
+            icon={<ScanFace />}
+            title="Find the photos you're in"
+            className="animate-rise"
+            action={
+              <Button icon={<Camera className="size-[18px]" />} onClick={() => setSelfieFor(self ?? null)} disabled={!self}>
+                Take a selfie
+              </Button>
+            }
+          >
+            Take a quick selfie. InFrame checks every photo in this event — and every new one.
+          </Callout>
         ) : event.counts.me > 0 && view.kind !== "me" ? (
           <button
             onClick={() => setView({ kind: "me" })}
-            className="group flex items-center gap-4 overflow-hidden rounded-[20px] bg-accent p-5 text-left text-accent-ink sm:p-6 animate-rise"
+            className="group flex items-center gap-3 rounded-lg bg-ac-soft px-4 py-3 text-left transition-shadow duration-[120ms] hover:shadow-[inset_0_0_0_1px_var(--ac-line)] animate-rise"
           >
+            <IconTile tone="onTint" className="text-ac">
+              <ScanFace />
+            </IconTile>
             <div className="min-w-0 flex-1">
-              <p className="font-display text-2xl font-semibold sm:text-3xl">You're in {plural(event.counts.me, "photo")}</p>
-              <p className="mt-0.5 text-[14px] opacity-80">Tap to see them all.</p>
+              <p className="num text-title-section text-tx">You're in {plural(event.counts.me, "photo")}</p>
+              <p className="text-caption text-tx2">Tap to see them all.</p>
             </div>
-            <span className="-rotate-6 rounded-lg border-2 border-current px-3 py-1.5 font-display text-lg font-bold tracking-wider transition-transform group-hover:rotate-0">
-              {event.counts.me} FOUND
+            <span className="inline-flex shrink-0 items-center gap-1 text-[14px] font-semibold text-ac">
+              <span className="num">{event.counts.me} found</span>
+              <ChevronRight className="size-4" aria-hidden />
             </span>
           </button>
         ) : null
@@ -194,48 +202,37 @@ export function EventPage() {
 
       {/* View switcher */}
       <div className="flex flex-col gap-3">
+        {/* Chips scroll sideways on phones and wrap on wider screens (§6.3). */}
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0" role="tablist" aria-label="Photo views">
           {tabs.map((t) => {
             const active = viewKey(t.view) === viewKey(view);
             return (
-              <button
-                key={viewKey(t.view)}
-                role="tab"
-                aria-selected={active}
-                onClick={() => setView(t.view)}
-                className={cx(
-                  "inline-flex h-9 shrink-0 items-center gap-2 rounded-full border px-4 text-[14px] font-medium transition-colors",
-                  active ? "border-ink bg-ink text-bg" : "border-line bg-surface text-ink-2 hover:bg-surface-2",
-                )}
-              >
+              <Chip key={viewKey(t.view)} role="tab" aria-selected={active} selected={active} count={t.count} onClick={() => setView(t.view)}>
                 {t.label}
-                {t.count !== null && <span className={cx("tabular-nums", active ? "text-bg/60" : "text-muted")}>{t.count}</span>}
-              </button>
+              </Chip>
             );
           })}
           {event.can.viewAll &&
             event.folders.map((f) => {
               const active = view.kind === "folder" && view.id === f.id;
               return (
-                <button
+                <Chip
                   key={f.id}
                   role="tab"
                   aria-selected={active}
+                  selected={active}
+                  dashed
+                  count={f.count}
                   onClick={() => setView({ kind: "folder", id: f.id })}
-                  className={cx(
-                    "inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-dashed px-4 text-[14px] font-medium transition-colors",
-                    active ? "border-ink bg-ink text-bg" : "border-line text-ink-2 hover:bg-surface-2",
-                  )}
                 >
                   {f.name}
-                  <span className={cx("tabular-nums", active ? "text-bg/60" : "text-muted")}>{f.count}</span>
-                </button>
+                </Chip>
               );
             })}
           {event.isHost && <NewAlbumButton eventId={event.id} />}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[13px] text-muted">
+          <p className="num text-body-s text-tx3">
             {activeFolder ? (
               <AlbumActions folder={activeFolder} eventId={event.id} isHost={event.isHost} onDeleted={() => setView({ kind: "all" })} />
             ) : (
@@ -259,7 +256,7 @@ export function EventPage() {
       {feed.isLoading ? (
         <GridSkeleton />
       ) : feed.error ? (
-        <p className="text-danger">{errorMessage(feed.error)}</p>
+        <ErrorBanner>{errorMessage(feed.error)}</ErrorBanner>
       ) : photos.length === 0 ? (
         <EmptyForView view={view} event={event} onSelfie={() => setSelfieFor(self ?? null)} />
       ) : (
@@ -301,36 +298,36 @@ function EventHeader({ event, onShare }: { event: EventDetail; onShare: () => vo
   const range = formatRange(event.startsOn, event.endsOn);
   const s = event.storage;
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-end">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
         {event.coverUrl && (
-          <img src={event.coverUrl} alt="" className="hidden size-24 shrink-0 rounded-2xl object-cover sm:block" />
+          <img src={event.coverUrl} alt="" className="hidden size-16 shrink-0 rounded-lg object-cover sm:block" />
         )}
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
-            <span className="font-semibold tracking-[0.14em] text-accent uppercase">{KIND_LABEL[event.kind]}</span>
+          <div className="num flex flex-wrap items-center gap-x-3 gap-y-1.5 text-body-s text-tx3">
+            <span className="text-label text-tx2">{KIND_LABEL[event.kind]}</span>
             {range && (
-              <span className="inline-flex items-center gap-1.5">
-                <CalendarDays className="size-3.5" /> {range}
+              <span className="inline-flex items-center gap-1">
+                <CalendarDays className="size-3.5" aria-hidden /> {range}
               </span>
             )}
-            <span className="inline-flex items-center gap-1.5">
-              <Users className="size-3.5" /> {plural(event.counts.members, "member")}
+            <span className="inline-flex items-center gap-1">
+              <Users className="size-3.5" aria-hidden /> {plural(event.counts.members, "member")}
             </span>
             <TrippinChip link={event.external} />
           </div>
-          <h1 className="mt-1 text-3xl font-semibold break-words sm:text-4xl">{event.name}</h1>
+          <h1 className="mt-1 text-title-page break-words">{event.name}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" icon={<UserPlus className="size-4" />} onClick={onShare}>
+          <Button variant="secondary" icon={<UserPlus className="size-[18px]" />} onClick={onShare}>
             Invite
           </Button>
           {event.can.upload && (
-            <LinkButton to={`/events/${event.id}/upload`} icon={<UploadCloud className="size-4" />}>
+            <LinkButton to={`/events/${event.id}/upload`} icon={<UploadCloud className="size-[18px]" />}>
               Add photos
             </LinkButton>
           )}
-          <LinkButton to={`/events/${event.id}/settings`} variant="secondary" icon={<Settings2 className="size-4" />}>
+          <LinkButton to={`/events/${event.id}/settings`} variant="secondary" icon={<Settings2 className="size-[18px]" />}>
             <span className="sr-only sm:not-sr-only">{event.isHost ? "Settings" : "Details"}</span>
           </LinkButton>
         </div>
@@ -363,14 +360,14 @@ function HostStatus({ event }: { event: EventDetail }) {
     items.push(
       <span key="nc" className="inline-flex items-center gap-1.5 text-warn">
         <AlertTriangle className="size-4" /> No storage folder connected — uploads are off.{" "}
-        <Link to={`/events/${event.id}/settings#storage`} className="font-semibold underline">Fix</Link>
+        <Link to={`/events/${event.id}/settings#storage`} className="font-semibold underline underline-offset-2">Fix</Link>
       </span>,
     );
   } else if (s.status === "error") {
     items.push(
       <span key="se" className="inline-flex items-center gap-1.5 text-warn">
         <AlertTriangle className="size-4" /> {s.error ?? "The storage account needs reconnecting."}{" "}
-        <Link to="/settings#storage" className="font-semibold underline">Reconnect</Link>
+        <Link to="/settings#storage" className="font-semibold underline underline-offset-2">Reconnect</Link>
       </span>,
     );
   } else if (s.syncState === "error") {
@@ -383,7 +380,7 @@ function HostStatus({ event }: { event: EventDetail }) {
   if (s.syncState === "syncing") {
     items.push(
       <span key="sync" className="inline-flex items-center gap-2">
-        <span className="rec-dot" /> Checking {s.folderName ?? "the folder"} for new photos…
+        <Spinner size={16} /> Checking {s.folderName ?? "the folder"} for new photos…
       </span>,
     );
   }
@@ -396,15 +393,18 @@ function HostStatus({ event }: { event: EventDetail }) {
   }
   if ((event.counts.failed ?? 0) > 0) {
     items.push(
-      <span key="fail" className="inline-flex items-center gap-2 text-danger">
+      <span key="fail" className="inline-flex items-center gap-2 font-medium text-crit">
+        <span className="size-2 rounded-full bg-crit-fill" aria-hidden />
         {plural(event.counts.failed!, "photo")} failed
-        <button onClick={() => retry.mutate()} disabled={retry.isPending} className="font-semibold underline">
+        <button onClick={() => retry.mutate()} disabled={retry.isPending} className="font-semibold text-ac hover:underline">
           Retry
         </button>
       </span>,
     );
   }
-  return <div className="flex flex-wrap gap-x-6 gap-y-2 rounded-2xl border border-line bg-surface px-4 py-3 text-[13px] text-ink-2">{items}</div>;
+  return (
+    <div className="num flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-ln bg-sf px-4 py-3 text-body-s text-tx2">{items}</div>
+  );
 }
 
 function EmptyForView({ view, event, onSelfie }: { view: View; event: EventDetail; onSelfie: () => void }) {
@@ -465,7 +465,7 @@ function NewAlbumButton({ eventId }: { eventId: string }) {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-[14px] font-medium text-muted hover:bg-surface-2 hover:text-ink"
+        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-dashed border-ln2 px-3.5 text-[13px] font-semibold text-ac transition-colors hover:bg-sf2"
       >
         <FolderPlus className="size-4" /> Album
       </button>
@@ -475,7 +475,7 @@ function NewAlbumButton({ eventId }: { eventId: string }) {
         title="New album"
         size="sm"
         footer={
-          <Button onClick={() => create.mutate()} disabled={!name.trim()} loading={create.isPending}>
+          <Button size="lg" onClick={() => create.mutate()} disabled={!name.trim()} loading={create.isPending}>
             Create album
           </Button>
         }
@@ -516,27 +516,33 @@ function AlbumActions({ folder, eventId, isHost, onDeleted }: { folder: Folder; 
       </span>
       {isHost && (
         <>
-          <IconButton label="Album options" onClick={() => setMenu((m) => !m)} className="size-7">
-            <MoreHorizontal className="size-4" />
-          </IconButton>
+          <button
+            type="button"
+            aria-label="Album options"
+            title="Album options"
+            onClick={() => setMenu((m) => !m)}
+            className="inline-flex size-8 items-center justify-center rounded-full text-tx2 transition-colors hover:bg-sf2 hover:text-tx"
+          >
+            <MoreHorizontal className="size-[18px]" />
+          </button>
           {menu && (
-            <span role="menu" className="absolute top-8 left-0 z-20 w-44 rounded-xl border border-line bg-surface p-1 shadow-lg animate-pop">
-              <button role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[14px] text-ink hover:bg-surface-2" onClick={() => { setMenu(false); setRenaming(true); }}>
-                <Pencil className="size-4" /> Rename
+            <span role="menu" className="absolute top-9 left-0 z-20 w-48 rounded-lg border border-ln bg-sf p-1 shadow-2 animate-pop">
+              <button role="menuitem" className="flex h-10 w-full items-center gap-2.5 rounded-md px-3 text-[14px] text-tx hover:bg-sf2" onClick={() => { setMenu(false); setRenaming(true); }}>
+                <Pencil className="size-[18px]" /> Rename
               </button>
               <button
                 role="menuitem"
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[14px] text-danger hover:bg-surface-2"
+                className="flex h-10 w-full items-center gap-2.5 rounded-md px-3 text-[14px] text-crit hover:bg-crit-soft"
                 onClick={async () => {
                   setMenu(false);
                   if (await confirm({ title: `Delete album “${folder.name}”?`, body: "The photos stay in the event (under All photos). Nothing is deleted from storage.", confirmLabel: "Delete album", danger: true })) remove.mutate();
                 }}
               >
-                <Trash2 className="size-4" /> Delete album
+                <Trash2 className="size-[18px]" /> Delete album
               </button>
             </span>
           )}
-          <Modal open={renaming} onClose={() => setRenaming(false)} title="Rename album" size="sm" footer={<Button onClick={() => rename.mutate()} loading={rename.isPending} disabled={!name.trim()}>Save</Button>}>
+          <Modal open={renaming} onClose={() => setRenaming(false)} title="Rename album" size="sm" footer={<Button size="lg" onClick={() => rename.mutate()} loading={rename.isPending} disabled={!name.trim()}>Save</Button>}>
             <TextField label="Album name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus />
           </Modal>
         </>

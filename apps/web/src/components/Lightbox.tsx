@@ -91,12 +91,12 @@ export function Lightbox({ photos, index, onIndex, onClose, onNeedMore }: Props)
             <IconButton label="Close" variant="glass" onClick={onClose}>
               <X className="size-5" />
             </IconButton>
-            <p className="ml-1 truncate text-[13px] text-white/70 tabular-nums">
+            <p className="num ml-1 truncate text-body-s text-white/70">
               {index + 1} of {photos.length}
             </p>
             <div className="ml-auto flex items-center gap-1.5">
               <IconButton label={isFav ? "Remove from favourites" : "Add to favourites"} variant="glass" onClick={() => favorite.mutate({ ids: [photo.id], value: !isFav })}>
-                <Heart className={cx("size-5", isFav && "fill-accent text-accent")} />
+                <Heart className={cx("size-5", isFav && "fill-stage-ac text-stage-ac")} />
               </IconButton>
               <IconButton
                 label="Download original"
@@ -145,7 +145,7 @@ export function Lightbox({ photos, index, onIndex, onClose, onNeedMore }: Props)
                 <p className="text-[14px] text-white/60">This video is still being saved to storage.</p>
               )
             ) : (
-              !loaded && <Spinner className="absolute text-white/60" />
+              !loaded && <Spinner onDark className="absolute" />
             )}
             {photo.mediaType !== "video" && photo.previewUrl && (
               <img
@@ -183,7 +183,7 @@ export function Lightbox({ photos, index, onIndex, onClose, onNeedMore }: Props)
                 onClick={() => onIndex(i)}
                 aria-label={`Photo ${i + 1}`}
                 aria-current={i === index}
-                className={cx("grid size-14 shrink-0 place-items-center overflow-hidden rounded-md bg-white/5 transition-opacity", i === index ? "ring-2 ring-accent" : "opacity-50 hover:opacity-90")}
+                className={cx("grid size-14 shrink-0 place-items-center overflow-hidden rounded-md bg-white/5 transition-opacity", i === index ? "ring-2 ring-stage-ac" : "opacity-50 hover:opacity-90")}
               >
                 {p.thumbUrl ? (
                   <img src={p.thumbUrl} alt="" loading="lazy" className="size-full object-cover" />
@@ -197,21 +197,21 @@ export function Lightbox({ photos, index, onIndex, onClose, onNeedMore }: Props)
 
         {/* Details */}
         {showInfo && (
-          <aside className="absolute inset-x-0 bottom-0 max-h-[55dvh] overflow-y-auto rounded-t-2xl bg-[#18171c] p-5 lg:static lg:max-h-none lg:w-80 lg:rounded-none lg:border-l lg:border-white/10">
-            <h2 className="truncate text-[15px] font-semibold">{photo.originalName}</h2>
+          <aside className="absolute inset-x-0 bottom-0 max-h-[55dvh] overflow-y-auto rounded-t-3xl bg-stage-sf p-5 lg:static lg:max-h-none lg:w-80 lg:rounded-none lg:border-l lg:border-white/10">
+            <h2 className="truncate font-mono text-[14px] font-medium">{photo.originalName}</h2>
             {photo.people.length > 0 && (
               <div className="mt-4">
-                <p className="text-[12px] tracking-[0.12em] text-white/50 uppercase">In this photo</p>
+                <p className="text-label text-white/60">In this photo</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {photo.people.map((p) => (
-                    <span key={p.id} className="rounded-full bg-accent px-2.5 py-1 text-[12px] font-semibold text-accent-ink">
+                    <span key={p.id} className="inline-flex h-6 items-center rounded-sm bg-stage-ac px-2 text-xs font-semibold text-stage-ac-tx">
                       {p.kind === "self" ? "You" : p.name}
                     </span>
                   ))}
                 </div>
               </div>
             )}
-            <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-[13px]">
+            <dl className="num mt-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-body-s">
               <dt className="text-white/50">Taken</dt>
               <dd>{formatDateTime(photo.takenAt)}</dd>
               <dt className="text-white/50">Added by</dt>
@@ -247,7 +247,7 @@ export function Lightbox({ photos, index, onIndex, onClose, onNeedMore }: Props)
             {d?.canSetCover && photo.thumbUrl && (
               <button
                 onClick={() => setCover.mutate()}
-                className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-2 text-[13px] font-medium hover:bg-white/20"
+                className="mt-6 inline-flex h-9 items-center gap-2 rounded-md bg-white/10 px-3 text-[13px] font-semibold hover:bg-white/20"
               >
                 <ImageIcon className="size-4" /> Use as event cover
               </button>

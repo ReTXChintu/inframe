@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/api.dart';
 import '../api/models.dart';
+import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/storage.dart';
 
@@ -42,7 +43,7 @@ class _ConnectStorageScreenState extends State<ConnectStorageScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Connect a folder')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+        padding: EdgeInsets.fromLTRB(Ds.pagePad(context), 8, Ds.pagePad(context), 32),
         children: [
           ErrorBox(_error),
           if (_error != null) const SizedBox(height: 12),

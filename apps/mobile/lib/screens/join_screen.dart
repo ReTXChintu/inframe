@@ -77,62 +77,94 @@ class _JoinScreenState extends State<JoinScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     final preview = _preview;
     return Scaffold(
       appBar: AppBar(title: const Text('Join an event')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        padding: EdgeInsets.fromLTRB(Ds.pagePad(context), 8, Ds.pagePad(context), 32),
         children: [
-          Text('Enter the code from the host, or scan their QR code.', style: TextStyle(color: p.muted, fontSize: 15)),
-          const SizedBox(height: 18),
-          TextField(
-            controller: _code,
-            textCapitalization: TextCapitalization.characters,
-            autocorrect: false,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(letterSpacing: 4),
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9-]')), LengthLimitingTextInputFormatter(9)],
-            decoration: InputDecoration(labelText: 'Join code', hintText: 'ABCD-2345', errorText: _error),
-            onChanged: (_) => setState(() => _preview = null),
-            onSubmitted: (_) => _lookup(),
+          Text('Enter the code from the host, or scan their QR code.', style: Theme.of(context).textTheme.bodyLarge!.copyWith(color: p.tx2)),
+          const SizedBox(height: 20),
+          DsLabel(
+            'Join code',
+            child: TextField(
+              controller: _code,
+              textCapitalization: TextCapitalization.characters,
+              autocorrect: false,
+              // A machine string: Plex Mono, wide tracking (§4.1).
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontFamily: Ds.mono, fontWeight: FontWeight.w500, letterSpacing: 4),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9-]')), LengthLimitingTextInputFormatter(9)],
+              decoration: InputDecoration(
+                hintText: 'ABCD-2345',
+                hintStyle: Theme.of(context).textTheme.headlineSmall
+                    ?.copyWith(fontFamily: Ds.mono, fontWeight: FontWeight.w500, letterSpacing: 4, color: p.ln2),
+                errorText: _error,
+                errorMaxLines: 3,
+              ),
+              onChanged: (_) => setState(() => _preview = null),
+              onSubmitted: (_) => _lookup(),
+            ),
           ),
-          const SizedBox(height: 14),
-          Row(children: [
-            Expanded(child: BusyButton(label: 'Continue', busy: _busy && preview == null, onPressed: () => _lookup())),
-            const SizedBox(width: 10),
-            OutlinedButton.icon(onPressed: _scan, icon: const Icon(Icons.qr_code_scanner), label: const Text('Scan QR')),
-          ]),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: BusyButton(label: 'Continue', busy: _busy && preview == null, onPressed: () => _lookup()),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(onPressed: _scan, icon: const Icon(Icons.qr_code_scanner, size: 18), label: const Text('Scan QR')),
+            ],
+          ),
           if (preview != null) ...[
             const SizedBox(height: 24),
             Card(
               clipBehavior: Clip.antiAlias,
-              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Container(
-                  color: p.ink,
-                  padding: const EdgeInsets.fromLTRB(18, 28, 18, 20),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text((kindLabels[preview.kind] ?? 'Event').toUpperCase(),
-                        style: TextStyle(color: p.accent, fontWeight: FontWeight.w700, letterSpacing: 2, fontSize: 12)),
-                    const SizedBox(height: 6),
-                    Text(preview.name, style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: p.bg)),
-                    const SizedBox(height: 4),
-                    Text('Hosted by ${preview.ownerName}', style: TextStyle(color: p.bg.withValues(alpha: 0.7))),
-                  ]),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Text(
-                      [formatRange(preview.startsOn, preview.endsOn), plural(preview.memberCount, 'member')].whereType<String>().join(' · '),
-                      style: TextStyle(color: p.muted),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    color: p.sf2,
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const DsIconTile(Icons.photo_library_outlined),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(kindLabels[preview.kind] ?? 'Event', style: Theme.of(context).textTheme.labelMedium!.copyWith(color: p.ac)),
+                              const SizedBox(height: 2),
+                              Text(preview.name, style: Theme.of(context).textTheme.headlineSmall),
+                              const SizedBox(height: 2),
+                              Text('Hosted by ${preview.ownerName}', style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: p.tx2)),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 14),
-                    _isMember
-                        ? FilledButton(onPressed: () => Navigator.pop(context, preview.id), child: const Text("You're in — open the event"))
-                        : BusyButton(label: 'Join ${(kindLabels[preview.kind] ?? 'event').toLowerCase()}', busy: _busy, onPressed: _join),
-                  ]),
-                ),
-              ]),
+                  ),
+                  const Divider(),
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          [formatRange(preview.startsOn, preview.endsOn), plural(preview.memberCount, 'member')].whereType<String>().join(' · '),
+                          style: TextStyle(color: p.tx3, fontSize: 13, fontFeatures: Ds.tabular),
+                        ),
+                        const SizedBox(height: 16),
+                        _isMember
+                            ? FilledButton(onPressed: () => Navigator.pop(context, preview.id), child: const Text("You're in — open the event"))
+                            : BusyButton(label: 'Join ${(kindLabels[preview.kind] ?? 'event').toLowerCase()}', busy: _busy, onPressed: _join),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ],
@@ -156,34 +188,43 @@ class _ScannerScreenState extends State<_ScannerScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white, title: const Text('Scan the event QR')),
-      body: Stack(children: [
-        MobileScanner(
-          onDetect: (capture) {
-            if (_done) return;
-            for (final b in capture.barcodes) {
-              final raw = b.rawValue;
-              if (raw != null && extractJoinCode(raw) != null) {
-                _done = true;
-                Navigator.pop(context, raw);
-                return;
+      body: Stack(
+        children: [
+          MobileScanner(
+            onDetect: (capture) {
+              if (_done) return;
+              for (final b in capture.barcodes) {
+                final raw = b.rawValue;
+                if (raw != null && extractJoinCode(raw) != null) {
+                  _done = true;
+                  Navigator.pop(context, raw);
+                  return;
+                }
               }
-            }
-          },
-        ),
-        Center(
-          child: Container(
-            width: 240,
-            height: 240,
-            decoration: BoxDecoration(border: Border.all(color: Colors.white70, width: 2), borderRadius: BorderRadius.circular(18)),
+            },
           ),
-        ),
-        const Positioned(
-          left: 0,
-          right: 0,
-          bottom: 48,
-          child: Text('Point the camera at the QR code from the host', textAlign: TextAlign.center, style: TextStyle(color: Colors.white)),
-        ),
-      ]),
+          Center(
+            child: Container(
+              width: 240,
+              height: 240,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white70, width: 2),
+                borderRadius: BorderRadius.circular(Ds.r2xl),
+              ),
+            ),
+          ),
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 48,
+            child: Text(
+              'Point the camera at the QR code from the host',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

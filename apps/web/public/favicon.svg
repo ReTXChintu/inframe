@@ -1,5 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="8" fill="#17161b"/>
-  <path d="M8 13V8h5M19 8h5v5M24 19v5h-5M13 24H8v-5" fill="none" stroke="#f4f2ec" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="16" cy="16" r="3.2" fill="#f2542d"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28">
+  <style>
+    .sq { fill: #6A3FC4; } .gl { stroke: #FFFFFF; }
+    @media (prefers-color-scheme: dark) { .sq { fill: #BBA4FF; } .gl { stroke: #1C0F3D; } }
+  </style>
+  <rect class="sq" width="28" height="28" rx="8"/>
+  <path class="gl" d="M7 11.5V7h4.5M16.5 7H21v4.5M21 16.5V21h-4.5M11.5 21H7v-4.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

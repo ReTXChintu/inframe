@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { plural } from "@/lib/format";
 import type { Person } from "@/lib/types";
 import { useFeedback } from "./feedback";
-import { Button, Modal } from "./ui";
+import { Button, ErrorBanner, FrameCorners, Modal, Spinner } from "./ui";
 
 type Phase = "camera" | "review" | "saving";
 
@@ -119,36 +119,32 @@ export function SelfieModal({ person, open, onClose }: { person: Person | null; 
   return (
     <Modal open={open} onClose={onClose} title={isSelf ? "Your selfie" : `Photo of ${person?.name ?? ""}`} size="sm">
       <div className="flex flex-col gap-4">
-        <p className="text-[14px] text-muted">
+        <p className="text-body-l text-tx2">
           Face the camera in good light — no sunglasses or mask, and only {isSelf ? "you" : "them"} in the shot. It's used
           only to find {isSelf ? "your" : "their"} photos.
         </p>
 
-        <div className="relative mx-auto aspect-square w-full max-w-[320px] overflow-hidden rounded-[28px] bg-stage">
+        <div className="relative mx-auto aspect-square w-full max-w-[320px] overflow-hidden rounded-2xl bg-stage">
           {phase === "camera" && !cameraError && (
             <video ref={video} autoPlay playsInline muted className="size-full object-cover" style={{ transform: facing === "user" ? "scaleX(-1)" : undefined }} />
           )}
           {phase === "camera" && cameraError && (
-            <div className="flex size-full items-center justify-center p-6 text-center text-[14px] text-white/80">{cameraError}</div>
+            <div className="flex size-full items-center justify-center p-6 text-center text-body text-white/80">{cameraError}</div>
           )}
           {phase !== "camera" && shot && <img src={shot.url} alt="Selfie preview" className="size-full object-cover" />}
           {/* Viewfinder: frame corners + an oval guide */}
-          <div className="frame pointer-events-none absolute inset-0 text-white/90 [--frame-inset:14px] [--frame-len:26px] [--frame-radius:10px]" />
+          <FrameCorners className="inset-3.5 text-white/90" />
           {phase === "camera" && !cameraError && (
             <div className="pointer-events-none absolute inset-[18%_22%] rounded-[50%] border-2 border-dashed border-white/60" />
           )}
           {phase === "saving" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 text-[14px] font-medium text-white">
-              <span className="rec-dot" /> Finding {isSelf ? "you" : person?.name} in photos…
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/55 text-body font-medium text-white">
+              <Spinner onDark /> Finding {isSelf ? "you" : person?.name} in photos…
             </div>
           )}
         </div>
 
-        {error && (
-          <p role="alert" className="rounded-xl bg-danger-soft px-3.5 py-2.5 text-[14px] text-danger">
-            {error}
-          </p>
-        )}
+        {error && <ErrorBanner>{error}</ErrorBanner>}
 
         <div className="flex flex-wrap justify-center gap-2">
           {phase === "camera" ? (

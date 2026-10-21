@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { PROVIDER_LABEL } from "@/lib/format";
 import type { Connection, ProviderName } from "@/lib/types";
 import { errorMessage, useFeedback } from "./feedback";
-import { Button, cx, Modal, PasswordField, Spinner, TextField } from "./ui";
+import { Button, cx, ErrorBanner, Modal, PasswordField, Spinner, TextField } from "./ui";
 
 export interface StorageChoice {
   connectionId: string | null;
@@ -35,19 +35,19 @@ export async function connectGoogle(returnTo: string) {
 export function GoogleNotSetUp() {
   const { me } = useAuth();
   return me?.user.isAdmin ? (
-    <p className="text-[12px] text-muted">
+    <p className="text-caption text-tx3">
       Google Drive isn't set up yet.{" "}
-      <Link to="/admin" className="font-semibold text-ink underline">
+      <Link to="/admin" className="font-semibold text-ac hover:underline">
         Add it in Admin settings
       </Link>
     </p>
   ) : (
-    <p className="text-[12px] text-muted">Google Drive isn't available yet — the admin hasn't set it up.</p>
+    <p className="text-caption text-tx3">Google Drive isn't available yet — the admin hasn't set it up.</p>
   );
 }
 
 export function ProviderMark({ provider, className }: { provider: ProviderName; className?: string }) {
-  if (provider === "memory") return <MemoryStick className={cx("size-5 text-muted", className)} aria-hidden />;
+  if (provider === "memory") return <MemoryStick className={cx("size-5 text-tx3", className)} aria-hidden />;
   return provider === "gdrive" ? (
     <svg viewBox="0 0 24 24" className={cx("size-5", className)} aria-hidden>
       <path d="M8.2 3h7.6l6 10.4h-7.6z" fill="#ffc107" />
@@ -90,14 +90,14 @@ export function MegaConnectModal({ open, onClose, onConnected }: { open: boolean
   return (
     <Modal open={open} onClose={onClose} title="Connect MEGA" size="sm">
       <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-        <p className="text-[14px] text-muted">
+        <p className="text-body-l text-tx2">
           InFrame signs in to your MEGA account to save and read event photos. Your password is stored encrypted and is only
           used for that. Accounts with two-factor login aren't supported.
         </p>
-        {error && <p role="alert" className="rounded-xl bg-danger-soft px-3.5 py-2.5 text-[14px] text-danger">{error}</p>}
+        {error && <ErrorBanner>{error}</ErrorBanner>}
         <TextField label="MEGA email" type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} error={fields.email} autoFocus />
         <PasswordField label="MEGA password" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} error={fields.password} />
-        <Button type="submit" loading={save.isPending}>
+        <Button type="submit" size="lg" loading={save.isPending}>
           Connect MEGA
         </Button>
       </form>
@@ -148,21 +148,21 @@ export function StoragePicker({
             aria-checked={value.connectionId === c.id}
             onClick={() => onChange({ ...value, connectionId: c.id })}
             className={cx(
-              "flex items-center gap-3 rounded-2xl border p-3.5 text-left transition-colors",
-              value.connectionId === c.id ? "border-ink bg-surface ring-1 ring-ink" : "border-line bg-surface hover:bg-surface-2",
+              "flex min-h-16 items-center gap-3 rounded-lg border p-3.5 text-left transition-colors duration-[120ms]",
+              value.connectionId === c.id ? "border-ac-line bg-ac-soft shadow-[inset_0_0_0_1px_var(--ac-line)]" : "border-ln bg-sf hover:bg-sf2",
             )}
           >
             <ProviderMark provider={c.provider} className="size-6" />
             <span className="min-w-0 flex-1">
-              <span className="block font-medium">{PROVIDER_LABEL[c.provider]}</span>
-              <span className="block truncate text-[13px] text-muted">{c.accountLabel}</span>
+              <span className="block text-title-card">{PROVIDER_LABEL[c.provider]}</span>
+              <span className="block truncate text-body-s text-tx3">{c.accountLabel}</span>
             </span>
             {c.status === "error" ? (
-              <span className="inline-flex items-center gap-1 text-[12px] font-medium text-warn">
-                <AlertTriangle className="size-4" /> Reconnect
+              <span className="inline-flex h-6 items-center gap-1 rounded-sm bg-warn-soft px-2 text-xs font-semibold text-warn">
+                <AlertTriangle className="size-3.5" /> Reconnect
               </span>
             ) : (
-              value.connectionId === c.id && <CheckCircle2 className="size-5 text-ink" />
+              value.connectionId === c.id && <CheckCircle2 className="size-5 text-ac" />
             )}
           </button>
         ))}
@@ -217,14 +217,14 @@ export function StoragePicker({
                 aria-checked={value.mode === o.mode}
                 onClick={() => onChange({ ...value, mode: o.mode })}
                 className={cx(
-                  "flex gap-3 rounded-2xl border p-3.5 text-left transition-colors",
-                  value.mode === o.mode ? "border-ink ring-1 ring-ink" : "border-line hover:bg-surface-2",
+                  "flex gap-3 rounded-lg border p-3.5 text-left transition-colors duration-[120ms]",
+                  value.mode === o.mode ? "border-ac-line bg-ac-soft shadow-[inset_0_0_0_1px_var(--ac-line)]" : "border-ln bg-sf hover:bg-sf2",
                 )}
               >
-                <o.icon className="mt-0.5 size-5 shrink-0" />
+                <o.icon className="mt-0.5 size-5 shrink-0 text-tx2" />
                 <span>
-                  <span className="block font-medium">{o.title}</span>
-                  <span className="block text-[13px] text-muted">{o.body}</span>
+                  <span className="block text-title-card">{o.title}</span>
+                  <span className="block text-body-s text-tx3">{o.body}</span>
                 </span>
               </button>
             ))}
@@ -242,16 +242,16 @@ export function StoragePicker({
                     onChange({ ...value, folder: e.target.value });
                   }}
                 />
-                <Button variant="secondary" className="mb-0.5" disabled={!value.folder.trim()} loading={check.isPending} onClick={() => check.mutate()}>
+                <Button variant="secondary" size="lg" className="mb-0.5" disabled={!value.folder.trim()} loading={check.isPending} onClick={() => check.mutate()}>
                   Check
                 </Button>
               </div>
               {resolved && resolved.input === value.folder && (
-                <p className="inline-flex items-center gap-1.5 text-[13px] text-ok">
+                <p className="inline-flex items-center gap-1.5 text-body-s font-medium text-good">
                   <CheckCircle2 className="size-4" /> Found “{resolved.name}”
                 </p>
               )}
-              <p className="text-[12px] text-muted">
+              <p className="text-caption text-tx3">
                 The folder must belong to the connected {PROVIDER_LABEL[selected.provider]} account. Sub-folders become albums.
               </p>
             </div>
@@ -260,7 +260,7 @@ export function StoragePicker({
       )}
 
       {connections.length === 0 && (
-        <p className="flex items-center gap-2 text-[14px] text-muted">
+        <p className="flex items-center gap-2 text-body text-tx3">
           <Plus className="size-4" /> Connect an account to keep this event's photos in your own storage.
         </p>
       )}

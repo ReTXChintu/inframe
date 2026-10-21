@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../api/api.dart';
@@ -46,32 +47,44 @@ String formatBytes(int? n) {
 }
 
 // ─── Feedback ──────────────────────────────────────────────────────────────
+
+/// Inverse toast (§7.12): ink fill, paper text, a 20 px leading icon.
 void toast(BuildContext context, String message, {bool error = false}) {
-  final p = Palette.of(context);
+  final p = DsColors.of(context);
+  // The toast is drawn in the opposite theme, so borrow that theme's semantic colours.
+  final inverse = Theme.of(context).brightness == Brightness.dark ? DsColors.light : DsColors.dark;
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(
-      content: Row(children: [
-        Icon(error ? Icons.error_outline : Icons.check_circle_outline, color: error ? const Color(0xFFFF8A75) : const Color(0xFF6EE0AD), size: 20),
-        const SizedBox(width: 10),
-        Expanded(child: Text(message, style: TextStyle(color: p.bg))),
-      ]),
-    ));
+    ..showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Row(
+          children: [
+            Icon(error ? Icons.error_outline : Icons.check_circle_outline, color: error ? inverse.crit : inverse.good, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(message, style: TextStyle(color: p.bg)),
+            ),
+          ],
+        ),
+      ),
+    );
 }
 
 String errorText(Object e) => e is ApiException ? e.message : 'Something went wrong.';
 
+/// Dialog (§7.7): radius 20, ghost Cancel + primary (or destructive) action.
 Future<bool> confirm(BuildContext context, {required String title, String? body, String action = 'Confirm', bool danger = false}) async {
-  final p = Palette.of(context);
+  final p = DsColors.of(context);
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: Text(title),
-      content: body == null ? null : Text(body, style: TextStyle(color: p.muted)),
+      content: body == null ? null : Text(body),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
         FilledButton(
-          style: danger ? FilledButton.styleFrom(backgroundColor: p.danger, foregroundColor: Colors.white) : null,
+          style: danger ? FilledButton.styleFrom(backgroundColor: p.critFill, foregroundColor: Colors.white) : null,
           onPressed: () => Navigator.pop(ctx, true),
           child: Text(action),
         ),
@@ -83,12 +96,101 @@ Future<bool> confirm(BuildContext context, {required String title, String? body,
 
 // ─── Inputs ────────────────────────────────────────────────────────────────
 
-/// Password input with a show/hide eye button (labelled for screen readers).
-class PasswordField extends StatefulWidget {
-  const PasswordField({
+/// Field label (§7.2): 12/16 600 tx2 +.02em, 6 above the field.
+class DsLabel extends StatelessWidget {
+  const DsLabel(this.text, {super.key, required this.child});
+  final String text;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(text, style: Theme.of(context).textTheme.labelMedium),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
+  }
+}
+
+/// A 52 px text field with its label above it (§7.2).
+class DsTextField extends StatelessWidget {
+  const DsTextField({
+    super.key,
+    required this.controller,
+    this.label,
+    this.hint,
+    this.helper,
+    this.error,
+    this.keyboardType,
+    this.textCapitalization = TextCapitalization.none,
+    this.autofocus = false,
+    this.autocorrect = true,
+    this.enableSuggestions = true,
+    this.maxLength,
+    this.minLines,
+    this.maxLines = 1,
+    this.style,
+    this.inputFormatters,
+    this.onChanged,
+    this.onSubmitted,
+    this.textInputAction,
+  });
+
+  final TextEditingController controller;
+  final String? label;
+  final String? hint;
+  final String? helper;
+  final String? error;
+  final TextInputType? keyboardType;
+  final TextCapitalization textCapitalization;
+  final bool autofocus;
+  final bool autocorrect;
+  final bool enableSuggestions;
+  final int? maxLength;
+  final int? minLines;
+  final int? maxLines;
+  final TextStyle? style;
+  final List<TextInputFormatter>? inputFormatters;
+  final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSubmitted;
+  final TextInputAction? textInputAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final field = TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      textCapitalization: textCapitalization,
+      autofocus: autofocus,
+      autocorrect: autocorrect,
+      enableSuggestions: enableSuggestions,
+      maxLength: maxLength,
+      minLines: minLines,
+      maxLines: maxLines,
+      style: style ?? Theme.of(context).textTheme.bodyLarge,
+      inputFormatters: inputFormatters,
+      onChanged: onChanged,
+      onSubmitted: onSubmitted,
+      textInputAction: textInputAction,
+      decoration: InputDecoration(hintText: hint, helperText: helper, helperMaxLines: 3, errorText: error, errorMaxLines: 3),
+    );
+    return label == null ? field : DsLabel(label!, child: field);
+  }
+}
+
+/// Password / secret input with a show/hide eye button (§7.2), labelled for
+/// screen readers ("Show password" / "Hide password"). Revealed values switch
+/// to IBM Plex Mono so ambiguous characters are clear.
+class DsPasswordField extends StatefulWidget {
+  const DsPasswordField({
     super.key,
     required this.controller,
     required this.label,
+    this.noun = 'password',
     this.error,
     this.hint,
     this.autofillHints,
@@ -98,6 +200,9 @@ class PasswordField extends StatefulWidget {
 
   final TextEditingController controller;
   final String label;
+
+  /// What the field holds, for the button's label: "Show password", "Show key", "Show PIN".
+  final String noun;
   final String? error;
   final String? hint;
   final Iterable<String>? autofillHints;
@@ -105,95 +210,233 @@ class PasswordField extends StatefulWidget {
   final ValueChanged<String>? onSubmitted;
 
   @override
-  State<PasswordField> createState() => _PasswordFieldState();
+  State<DsPasswordField> createState() => _DsPasswordFieldState();
 }
 
-class _PasswordFieldState extends State<PasswordField> {
+class _DsPasswordFieldState extends State<DsPasswordField> {
   bool _visible = false;
 
   @override
   Widget build(BuildContext context) {
-    final label = _visible ? 'Hide password' : 'Show password';
-    return TextField(
-      controller: widget.controller,
-      obscureText: !_visible,
-      autocorrect: false,
-      enableSuggestions: false,
-      autofillHints: widget.autofillHints,
-      textInputAction: widget.textInputAction,
-      onSubmitted: widget.onSubmitted,
-      decoration: InputDecoration(
-        labelText: widget.label,
-        errorText: widget.error,
-        helperText: widget.hint,
-        helperMaxLines: 2,
-        suffixIcon: IconButton(
-          tooltip: label,
-          icon: Icon(_visible ? Icons.visibility_off_outlined : Icons.visibility_outlined, semanticLabel: label),
-          onPressed: () => setState(() => _visible = !_visible),
+    final label = '${_visible ? 'Hide' : 'Show'} ${widget.noun}';
+    final base = Theme.of(context).textTheme.bodyLarge!;
+    return DsLabel(
+      widget.label,
+      child: TextField(
+        controller: widget.controller,
+        obscureText: !_visible,
+        autocorrect: false,
+        enableSuggestions: false,
+        autofillHints: widget.autofillHints,
+        textInputAction: widget.textInputAction,
+        onSubmitted: widget.onSubmitted,
+        style: _visible ? base.copyWith(fontFamily: Ds.mono) : base,
+        decoration: InputDecoration(
+          errorText: widget.error,
+          helperText: widget.hint,
+          helperMaxLines: 2,
+          suffixIcon: Semantics(
+            label: label,
+            toggled: _visible,
+            button: true,
+            excludeSemantics: true,
+            child: IconButton(
+              tooltip: label,
+              icon: Icon(_visible ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20, semanticLabel: label),
+              onPressed: () => setState(() => _visible = !_visible),
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
+/// Segmented control (§7.3): sunk track radius 12, padding 4, an sf thumb
+/// with a small shadow that slides to the selected option.
+class DsSegmented<T> extends StatelessWidget {
+  const DsSegmented({super.key, required this.value, required this.options, required this.onChanged, this.label});
+  final T value;
+  final List<(T, String, IconData?)> options;
+  final ValueChanged<T> onChanged;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = DsColors.of(context);
+    final text = Theme.of(context).textTheme;
+    final index = options.indexWhere((o) => o.$1 == value).clamp(0, options.length - 1);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Semantics(
+      label: label,
+      container: true,
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(color: p.sunk, borderRadius: BorderRadius.circular(Ds.rLg)),
+        child: Stack(
+          children: [
+            AnimatedAlign(
+              duration: Ds.dur,
+              curve: Ds.ease,
+              alignment: Alignment(options.length == 1 ? 0 : -1 + 2 * index / (options.length - 1), 0),
+              child: FractionallySizedBox(
+                widthFactor: 1 / options.length,
+                heightFactor: 1,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: p.sf,
+                    borderRadius: BorderRadius.circular(9),
+                    boxShadow: dark
+                        ? const [BoxShadow(color: Color(0x05FFFFFF), spreadRadius: 1)]
+                        : const [
+                            BoxShadow(color: Color(0x0F18191D), blurRadius: 2, offset: Offset(0, 1)),
+                            BoxShadow(color: Color(0x0D18191D), blurRadius: 8, offset: Offset(0, 2)),
+                          ],
+                  ),
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                for (final (v, l, icon) in options)
+                  Expanded(
+                    child: Semantics(
+                      selected: v == value,
+                      button: true,
+                      inMutuallyExclusiveGroup: true,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(9),
+                        onTap: () => onChanged(v),
+                        child: Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (icon != null) ...[Icon(icon, size: 16, color: v == value ? p.tx : p.tx2), const SizedBox(width: 6)],
+                              Text(
+                                l,
+                                style: text.bodyMedium!.copyWith(fontWeight: v == value ? FontWeight.w600 : FontWeight.w500, color: v == value ? p.tx : p.tx2),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Filter / choice chip (§7.4): 36 h, radius 999, ln2 border; selected is
+/// ink-filled. An optional count sits after the label in tabular figures.
+class DsChoiceChip extends StatelessWidget {
+  const DsChoiceChip({super.key, required this.label, required this.selected, required this.onSelected, this.count, this.avatar, this.icon});
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+  final int? count;
+  final Widget? avatar;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = DsColors.of(context);
+    final style = Theme.of(context).textTheme.bodySmall!.copyWith(fontWeight: FontWeight.w500, color: selected ? p.bg : p.tx);
+    return ChoiceChip(
+      selected: selected,
+      onSelected: (_) => onSelected(),
+      visualDensity: const VisualDensity(vertical: -1),
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      avatar: avatar ?? (icon == null ? null : Icon(icon, size: 16, color: selected ? p.bg : p.tx2)),
+      label: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(text: label),
+            if (count != null)
+              TextSpan(
+                text: '  ${NumberFormat.decimalPattern().format(count)}',
+                style: TextStyle(color: selected ? p.bg.withValues(alpha: 0.72) : p.tx3, fontFeatures: Ds.tabular),
+              ),
+          ],
+        ),
+        style: style,
+      ),
+    );
+  }
+}
+
 // ─── Visual bits ───────────────────────────────────────────────────────────
+
+/// The InFrame mark (§7.16, §10): a 28 px accent square, rx 8, with four
+/// frame corners in ac-tx at a 2.2 round stroke; then the 18/700 wordmark.
 class Logo extends StatelessWidget {
-  const Logo({super.key, this.size = 22});
+  const Logo({super.key, this.size = 18});
+
+  /// Wordmark size; the mark scales with it (28 at 18).
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Container(
-        width: size * 1.3,
-        height: size * 1.3,
-        decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(size * 0.33)),
-        child: CustomPaint(painter: _ViewfinderPainter(p.bg, p.accent)),
+    final p = DsColors.of(context);
+    final mark = size * 28 / 18;
+    return Semantics(
+      label: 'InFrame',
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox.square(
+            dimension: mark,
+            child: CustomPaint(painter: _MarkPainter(p.ac, p.acTx)),
+          ),
+          SizedBox(width: size * 10 / 18),
+          Text(
+            'InFrame',
+            style: TextStyle(fontFamily: Ds.sans, fontSize: size, height: 1.2, fontWeight: FontWeight.w700, letterSpacing: -0.01 * size, color: p.tx),
+          ),
+        ],
       ),
-      SizedBox(width: size * 0.4),
-      Text.rich(
-        TextSpan(children: [
-          const TextSpan(text: 'In'),
-          TextSpan(text: 'Frame', style: TextStyle(color: p.accent)),
-        ]),
-        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: size, fontWeight: FontWeight.w700),
-      ),
-    ]);
+    );
   }
 }
 
-class _ViewfinderPainter extends CustomPainter {
-  _ViewfinderPainter(this.line, this.dot);
-  final Color line, dot;
+class _MarkPainter extends CustomPainter {
+  _MarkPainter(this.fill, this.line);
+  final Color fill, line;
 
   @override
   void paint(Canvas canvas, Size s) {
-    final u = s.width / 32;
+    final u = s.width / 28;
+    canvas.drawRRect(RRect.fromRectAndRadius(Offset.zero & s, Radius.circular(8 * u)), Paint()..color = fill);
     final paint = Paint()
       ..color = line
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.4 * u
+      ..strokeWidth = 2.2 * u
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
-    for (final pts in [
-      [8, 13, 8, 8, 13, 8],
-      [19, 8, 24, 8, 24, 13],
-      [24, 19, 24, 24, 19, 24],
-      [13, 24, 8, 24, 8, 19],
+    for (final pts in const [
+      [7.0, 11.0, 7.0, 7.0, 11.0, 7.0],
+      [17.0, 7.0, 21.0, 7.0, 21.0, 11.0],
+      [21.0, 17.0, 21.0, 21.0, 17.0, 21.0],
+      [11.0, 21.0, 7.0, 21.0, 7.0, 17.0],
     ]) {
-      final path = Path()
-        ..moveTo(pts[0] * u, pts[1] * u)
-        ..lineTo(pts[2] * u, pts[3] * u)
-        ..lineTo(pts[4] * u, pts[5] * u);
-      canvas.drawPath(path, paint);
+      canvas.drawPath(
+        Path()
+          ..moveTo(pts[0] * u, pts[1] * u)
+          ..lineTo(pts[2] * u, pts[3] * u)
+          ..lineTo(pts[4] * u, pts[5] * u),
+        paint,
+      );
     }
-    canvas.drawCircle(Offset(16 * u, 16 * u), 3.2 * u, Paint()..color = dot);
   }
 
   @override
-  bool shouldRepaint(covariant _ViewfinderPainter old) => old.line != line || old.dot != dot;
+  bool shouldRepaint(covariant _MarkPainter old) => old.fill != fill || old.line != line;
 }
 
 /// Network image from the server. Signed URLs rotate every few hours, so the
@@ -206,19 +449,28 @@ class NetImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
-    if (url == null) return ColoredBox(color: p.surface2, child: Icon(Icons.image_outlined, color: p.muted));
+    final p = DsColors.of(context);
+    if (url == null) {
+      return ColoredBox(
+        color: p.sunk,
+        child: Icon(Icons.image_outlined, color: p.tx3),
+      );
+    }
     return CachedNetworkImage(
       imageUrl: api.resolve(url!),
       cacheKey: cacheKey ?? url!.split('?').first,
       fit: fit,
       fadeInDuration: const Duration(milliseconds: 150),
-      placeholder: (_, _) => ColoredBox(color: p.surface2),
-      errorWidget: (_, _, _) => ColoredBox(color: p.surface2, child: Icon(Icons.broken_image_outlined, color: p.muted)),
+      placeholder: (_, _) => ColoredBox(color: p.sunk),
+      errorWidget: (_, _, _) => ColoredBox(
+        color: p.sunk,
+        child: Icon(Icons.broken_image_outlined, color: p.tx3),
+      ),
     );
   }
 }
 
+/// Person avatar (§7.5): a circle; initials 600 in the accent's soft tint.
 class PersonAvatar extends StatelessWidget {
   const PersonAvatar({super.key, required this.name, this.url, this.size = 40, this.cacheKey});
   final String name;
@@ -228,16 +480,19 @@ class PersonAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     return ClipOval(
       child: SizedBox.square(
         dimension: size,
         child: url != null
             ? NetImage(url, cacheKey: cacheKey)
             : ColoredBox(
-                color: p.surface2,
+                color: p.acSoft,
                 child: Center(
-                  child: Text(initials(name), style: TextStyle(fontWeight: FontWeight.w600, color: p.ink2, fontSize: size * 0.36)),
+                  child: Text(
+                    initials(name),
+                    style: TextStyle(fontWeight: FontWeight.w600, color: p.ac, fontSize: (size * 0.36).clamp(10, 22)),
+                  ),
                 ),
               ),
       ),
@@ -245,35 +500,150 @@ class PersonAvatar extends StatelessWidget {
   }
 }
 
-class Pill extends StatelessWidget {
-  const Pill(this.text, {super.key, this.tone = PillTone.neutral, this.icon});
+enum DsTone { neutral, accent, good, warn, crit, outline }
+
+/// Badge / status tag (§7.4): 24 h, radius 6, 12/600, soft fill + strong text.
+class DsBadge extends StatelessWidget {
+  const DsBadge(this.text, {super.key, this.tone = DsTone.neutral, this.icon});
   final String text;
-  final PillTone tone;
+  final DsTone tone;
   final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     final (bg, fg) = switch (tone) {
-      PillTone.neutral => (p.surface2, p.ink2),
-      PillTone.accent => (p.accentSoft, p.accent),
-      PillTone.ok => (p.okSoft, p.ok),
-      PillTone.warn => (p.accentSoft, p.warn),
-      PillTone.danger => (p.dangerSoft, p.danger),
+      DsTone.neutral => (p.sunk, p.tx2),
+      DsTone.accent => (p.acSoft, p.ac),
+      DsTone.good => (p.goodSoft, p.good),
+      DsTone.warn => (p.warnSoft, p.warn),
+      DsTone.crit => (p.critSoft, p.crit),
+      DsTone.outline => (Colors.transparent, p.tx2),
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(99)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        if (icon != null) ...[Icon(icon, size: 13, color: fg), const SizedBox(width: 4)],
-        Text(text, style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w600)),
-      ]),
+      constraints: const BoxConstraints(minHeight: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(Ds.rSm),
+        border: tone == DsTone.outline ? Border.all(color: p.ln2) : null,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[Icon(icon, size: 14, color: fg), const SizedBox(width: 4)],
+          Flexible(
+            child: Text(
+              text,
+              style: TextStyle(fontFamily: Ds.sans, color: fg, fontSize: 12, height: 16 / 12, fontWeight: FontWeight.w600, fontFeatures: Ds.tabular),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-enum PillTone { neutral, accent, ok, warn, danger }
+/// Icon tile (§7.5): a rounded-10 square in a soft tint with the icon in the
+/// strong tint. [onTinted] draws it on `sf` for use inside a tinted callout.
+class DsIconTile extends StatelessWidget {
+  const DsIconTile(this.icon, {super.key, this.tone = DsTone.accent, this.size = 40, this.onTinted = false});
+  final IconData icon;
+  final DsTone tone;
+  final double size;
+  final bool onTinted;
 
+  @override
+  Widget build(BuildContext context) {
+    final p = DsColors.of(context);
+    final (bg, fg) = switch (tone) {
+      DsTone.accent => (p.acSoft, p.ac),
+      DsTone.good => (p.goodSoft, p.good),
+      DsTone.warn => (p.warnSoft, p.warn),
+      DsTone.crit => (p.critSoft, p.crit),
+      DsTone.neutral || DsTone.outline => (p.sunk, p.tx2),
+    };
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: onTinted ? p.sf : bg, borderRadius: BorderRadius.circular(size >= 48 ? Ds.rLg : Ds.rMd)),
+      child: Icon(icon, size: size >= 48 ? 24 : 20, color: fg),
+    );
+  }
+}
+
+/// Callout / banner (§7.5): radius 12, a tinted fill, an icon tile on the tint,
+/// a 15/20 title, a 13/18 body, and optional trailing or bottom actions.
+class DsCallout extends StatelessWidget {
+  const DsCallout({super.key, required this.icon, required this.title, this.body, this.tone = DsTone.accent, this.action, this.trailing, this.onTap});
+  final IconData icon;
+  final String title;
+  final String? body;
+  final DsTone tone;
+
+  /// Shown under the text, right-aligned.
+  final Widget? action;
+
+  /// Shown at the end of the row (e.g. a chevron or a compact button).
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = DsColors.of(context);
+    final text = Theme.of(context).textTheme;
+    final bg = switch (tone) {
+      DsTone.accent => p.acSoft,
+      DsTone.good => p.goodSoft,
+      DsTone.warn => p.warnSoft,
+      DsTone.crit => p.critSoft,
+      DsTone.neutral || DsTone.outline => p.sunk,
+    };
+    final titleColor = switch (tone) {
+      DsTone.warn => p.warn,
+      DsTone.crit => p.crit,
+      _ => p.tx,
+    };
+    final radius = BorderRadius.circular(Ds.rLg);
+    return Material(
+      color: bg,
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DsIconTile(icon, tone: tone, onTinted: true),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: text.titleSmall!.copyWith(color: titleColor)),
+                        if (body != null) ...[const SizedBox(height: 2), Text(body!, style: text.bodySmall!.copyWith(color: p.tx2))],
+                      ],
+                    ),
+                  ),
+                  if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+                ],
+              ),
+              if (action != null) ...[const SizedBox(height: 12), Align(alignment: Alignment.centerRight, child: action)],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Empty state (§7.11): a centred column with a 48 icon tile, a 15/20 title,
+/// a 15/22 line of help, and one action.
 class EmptyView extends StatelessWidget {
   const EmptyView({super.key, required this.icon, required this.title, this.body, this.action});
   final IconData icon;
@@ -283,28 +653,37 @@ class EmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
+    final text = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(border: Border.all(color: p.line, width: 2), borderRadius: BorderRadius.circular(18)),
-          child: Icon(icon, size: 32, color: p.muted),
-        ),
-        const SizedBox(height: 16),
-        Text(title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-        if (body != null) ...[
-          const SizedBox(height: 6),
-          Text(body!, textAlign: TextAlign.center, style: TextStyle(color: p.muted)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(color: p.sunk, borderRadius: BorderRadius.circular(Ds.rLg)),
+            child: Icon(icon, size: 24, color: p.tx3),
+          ),
+          const SizedBox(height: 12),
+          Text(title, textAlign: TextAlign.center, style: text.titleSmall),
+          if (body != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              body!,
+              textAlign: TextAlign.center,
+              style: text.bodyLarge!.copyWith(color: p.tx2),
+            ),
+          ],
+          if (action != null) ...[const SizedBox(height: 16), action!],
         ],
-        if (action != null) ...[const SizedBox(height: 18), action!],
-      ]),
+      ),
     );
   }
 }
 
+/// Inline alert banner (§7.11): crit-soft, radius 12, a 20 px icon.
 class ErrorBox extends StatelessWidget {
   const ErrorBox(this.message, {super.key});
   final String? message;
@@ -312,16 +691,35 @@ class ErrorBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (message == null) return const SizedBox.shrink();
-    final p = Palette.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: p.dangerSoft, borderRadius: BorderRadius.circular(12)),
-      child: Text(message!, style: TextStyle(color: p.danger)),
+    final p = DsColors.of(context);
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(color: p.critSoft, borderRadius: BorderRadius.circular(Ds.rLg)),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Icon(Icons.error_outline, size: 20, color: p.crit),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message!,
+                style: TextStyle(fontFamily: Ds.sans, color: p.crit, fontSize: 15, height: 20 / 15, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
+/// Section card (§7.5): sf, 1px ln, radius 14, no shadow; a 17/24 header.
 class SectionCard extends StatelessWidget {
   const SectionCard({super.key, required this.title, this.subtitle, required this.child, this.trailing});
   final String title;
@@ -331,25 +729,31 @@ class SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
+    final text = Theme.of(context).textTheme;
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
-            ?trailing,
-          ]),
-          if (subtitle != null) ...[const SizedBox(height: 4), Text(subtitle!, style: TextStyle(color: p.muted, fontSize: 13))],
-          const SizedBox(height: 12),
-          child,
-        ]),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text(title, style: text.titleMedium)),
+                ?trailing,
+              ],
+            ),
+            if (subtitle != null) ...[const SizedBox(height: 2), Text(subtitle!, style: text.bodySmall!.copyWith(color: p.tx3))],
+            const SizedBox(height: 12),
+            child,
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Small loader button: shows a spinner while [busy].
+/// Primary button that shows a spinner while [busy].
 class BusyButton extends StatelessWidget {
   const BusyButton({super.key, required this.label, required this.onPressed, this.busy = false, this.icon});
   final String label;
@@ -359,15 +763,28 @@ class BusyButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     return FilledButton(
       onPressed: busy ? null : onPressed,
       child: busy
-          ? SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2.2, color: p.bg))
-          : Row(mainAxisSize: MainAxisSize.min, children: [
-              if (icon != null) ...[Icon(icon, size: 18), const SizedBox(width: 8)],
-              Text(label),
-            ]),
+          ? SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: p.ac))
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[Icon(icon, size: 18), const SizedBox(width: 8)],
+                Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+              ],
+            ),
     );
   }
+}
+
+/// Destructive button style (§7.1): transparent, crit text, a crit-soft border.
+ButtonStyle dsDangerOutline(BuildContext context) {
+  final p = DsColors.of(context);
+  return OutlinedButton.styleFrom(
+    backgroundColor: Colors.transparent,
+    foregroundColor: p.crit,
+    side: BorderSide(color: p.critSoft),
+  );
 }

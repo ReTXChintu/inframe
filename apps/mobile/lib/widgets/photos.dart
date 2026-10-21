@@ -44,9 +44,7 @@ class PhotoFeed extends ChangeNotifier {
     notifyListeners();
     try {
       final sep = path.contains('?') ? '&' : '?';
-      final res = await api.get<Map<String, dynamic>>(
-        '$path${_cursor != null ? '${sep}cursor=${Uri.encodeComponent(_cursor!)}' : ''}',
-      );
+      final res = await api.get<Map<String, dynamic>>('$path${_cursor != null ? '${sep}cursor=${Uri.encodeComponent(_cursor!)}' : ''}');
       if (gen != _generation) return; // a newer refresh started
       final page = PhotoPage(res);
       items.addAll(page.items);
@@ -79,14 +77,7 @@ class PhotoFeed extends ChangeNotifier {
 
 /// Sliver grid of thumbnails with long-press multi-select.
 class PhotoGridSliver extends StatelessWidget {
-  const PhotoGridSliver({
-    super.key,
-    required this.feed,
-    required this.selected,
-    required this.onTap,
-    required this.onToggle,
-    this.showEvent = false,
-  });
+  const PhotoGridSliver({super.key, required this.feed, required this.selected, required this.onTap, required this.onToggle, this.showEvent = false});
 
   final PhotoFeed feed;
   final Set<String> selected;
@@ -96,11 +87,16 @@ class PhotoGridSliver extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     final width = MediaQuery.sizeOf(context).width;
-    final columns = width > 900 ? 6 : width > 600 ? 4 : 3;
+    final columns = width > 900
+        ? 6
+        : width > 600
+        ? 4
+        : 3;
+    // Photos are the hero: a dense, edge-to-edge grid with quiet chrome.
     return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
+      padding: EdgeInsets.zero,
       sliver: SliverGrid.builder(
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: columns, mainAxisSpacing: 2, crossAxisSpacing: 2),
         itemCount: feed.items.length,
@@ -111,74 +107,94 @@ class PhotoGridSliver extends StatelessWidget {
           return GestureDetector(
             onTap: () => selected.isNotEmpty ? onToggle(photo) : onTap(i),
             onLongPress: () => onToggle(photo),
-            child: Stack(fit: StackFit.expand, children: [
-              AnimatedPadding(
-                duration: const Duration(milliseconds: 120),
-                padding: EdgeInsets.all(isSelected ? 8 : 0),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(isSelected ? 10 : 2),
-                  child: NetImage(photo.thumbUrl, cacheKey: '${photo.id}:thumb'),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                AnimatedPadding(
+                  duration: const Duration(milliseconds: 120),
+                  padding: EdgeInsets.all(isSelected ? 8 : 0),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(isSelected ? Ds.rMd : 0),
+                    child: NetImage(photo.thumbUrl, cacheKey: '${photo.id}:thumb'),
+                  ),
                 ),
-              ),
-              if (photo.isVideo)
+                if (photo.isVideo)
+                  Positioned(
+                    right: 4,
+                    top: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.play_arrow_rounded, size: 13, color: Colors.white),
+                          Text(
+                            photo.durationMs != null ? formatDuration(Duration(milliseconds: photo.durationMs!)) : 'Video',
+                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600, fontFeatures: Ds.tabular),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (showEvent && photo.eventName != null)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(6, 14, 6, 4),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black54]),
+                      ),
+                      child: Text(
+                        photo.eventName!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                      ),
+                    ),
+                  ),
                 Positioned(
                   right: 4,
-                  top: 4,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                    decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(99)),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.play_arrow_rounded, size: 13, color: Colors.white),
-                      Text(
-                        photo.durationMs != null ? formatDuration(Duration(milliseconds: photo.durationMs!)) : 'Video',
-                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
+                  bottom: 4,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (photo.people.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(color: p.ac, borderRadius: BorderRadius.circular(4)),
+                          child: Text(
+                            photo.hasMe ? 'You' : '${photo.people.first['name']}'.split(' ').first,
+                            style: TextStyle(fontFamily: Ds.sans, color: p.acTx, fontSize: 10, height: 14 / 10, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      if (photo.favorite)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 3),
+                          child: Icon(Icons.favorite, color: Colors.white, size: 15),
+                        ),
+                    ],
+                  ),
+                ),
+                if (selected.isNotEmpty)
+                  Positioned(
+                    left: 6,
+                    top: 6,
+                    child: Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isSelected ? p.ac : Colors.black26,
+                        border: Border.all(color: Colors.white, width: 2),
                       ),
-                    ]),
-                  ),
-                ),
-              if (showEvent && photo.eventName != null)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(6, 14, 6, 4),
-                    decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black54])),
-                    child: Text(photo.eventName!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 11)),
-                  ),
-                ),
-              Positioned(
-                right: 4,
-                bottom: 4,
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  if (photo.people.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                      decoration: BoxDecoration(color: p.accent, borderRadius: BorderRadius.circular(99)),
-                      child: Text(
-                        photo.hasMe ? 'YOU' : '${photo.people.first['name']}'.split(' ').first.toUpperCase(),
-                        style: TextStyle(color: p.accentInk, fontSize: 9, fontWeight: FontWeight.w800),
-                      ),
+                      child: isSelected ? Icon(Icons.check, size: 14, color: p.acTx) : null,
                     ),
-                  if (photo.favorite) const Padding(padding: EdgeInsets.only(left: 3), child: Icon(Icons.favorite, color: Colors.white, size: 15)),
-                ]),
-              ),
-              if (selected.isNotEmpty)
-                Positioned(
-                  left: 6,
-                  top: 6,
-                  child: Container(
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isSelected ? p.accent : Colors.black26,
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                    child: isSelected ? Icon(Icons.check, size: 14, color: p.accentInk) : null,
                   ),
-                ),
-            ]),
+              ],
+            ),
           );
         },
       ),
@@ -187,8 +203,7 @@ class PhotoGridSliver extends StatelessWidget {
 }
 
 /// Favourite / delete a set of photos. Returns ids actually deleted (for delete).
-Future<void> setFavorite(List<String> ids, bool value) =>
-    api.post<dynamic>('/api/photos/favorite', {'photoIds': ids, 'favorite': value});
+Future<void> setFavorite(List<String> ids, bool value) => api.post<dynamic>('/api/photos/favorite', {'photoIds': ids, 'favorite': value});
 
 Future<Set<String>> deletePhotos(BuildContext context, List<String> ids) async {
   final ok = await confirm(
@@ -203,8 +218,11 @@ Future<Set<String>> deletePhotos(BuildContext context, List<String> ids) async {
   final deleted = (res['deleted'] as List).map((e) => '$e').toSet();
   final failed = res['failed'] as List;
   if (context.mounted) {
-    toast(context, failed.isNotEmpty ? "${plural(failed.length, 'photo')} couldn't be deleted." : 'Deleted ${plural(deleted.length, 'photo')}.',
-        error: failed.isNotEmpty);
+    toast(
+      context,
+      failed.isNotEmpty ? "${plural(failed.length, 'photo')} couldn't be deleted." : 'Deleted ${plural(deleted.length, 'photo')}.',
+      error: failed.isNotEmpty,
+    );
   }
   return deleted;
 }
@@ -324,29 +342,47 @@ class _PhotoViewerState extends State<PhotoViewer> {
               'done' => '${photo.faceCount}',
               'failed' => "Couldn't scan",
               _ => 'Scanning…',
-            }
+            },
           ),
         ];
         return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(photo.originalName, style: Theme.of(context).textTheme.titleMedium),
-            if (photo.people.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Wrap(spacing: 6, children: [
-                for (final person in photo.people) Pill(person['kind'] == 'self' ? 'You' : '${person['name']}', tone: PillTone.accent),
-              ]),
-            ],
-            const SizedBox(height: 14),
-            for (final (k, v) in rows)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(children: [
-                  SizedBox(width: 90, child: Text(k, style: TextStyle(color: Palette.of(context).muted))),
-                  Expanded(child: Text(v)),
-                ]),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                photo.originalName,
+                style: const TextStyle(fontFamily: Ds.mono, fontSize: 15, height: 20 / 15, fontWeight: FontWeight.w500),
               ),
-          ]),
+              if (photo.people.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 6,
+                  children: [for (final person in photo.people) DsBadge(person['kind'] == 'self' ? 'You' : '${person['name']}', tone: DsTone.accent)],
+                ),
+              ],
+              const SizedBox(height: 14),
+              for (final (k, v) in rows)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 96,
+                        child: Text(
+                          k,
+                          style: Theme.of(context).textTheme.bodySmall!.copyWith(color: DsColors.of(context).tx3, height: 20 / 13),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(v, style: Theme.of(context).textTheme.bodyMedium!.copyWith(fontFeatures: Ds.tabular)),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
@@ -358,69 +394,89 @@ class _PhotoViewerState extends State<PhotoViewer> {
     final photo = _photo;
     final canDelete = _details[photo.id]?.canDelete ?? false;
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0C10),
-      body: Stack(children: [
-        PageView.builder(
-          controller: _pages,
-          itemCount: feed.items.length,
-          onPageChanged: (i) {
-            setState(() => _index = i);
-            if (i >= feed.items.length - 4) feed.loadMore().then((_) => mounted ? setState(() {}) : null);
-            _loadDetail();
-          },
-          itemBuilder: (_, i) {
-            final item = feed.items[i];
-            if (item.isVideo) {
-              return _VideoPage(
-                key: ValueKey(item.id),
-                photo: item,
-                active: i == _index,
+      // The viewer stays dark whatever the theme, so the photo is the only thing lit.
+      backgroundColor: Ds.stage,
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _pages,
+            itemCount: feed.items.length,
+            onPageChanged: (i) {
+              setState(() => _index = i);
+              if (i >= feed.items.length - 4) feed.loadMore().then((_) => mounted ? setState(() {}) : null);
+              _loadDetail();
+            },
+            itemBuilder: (_, i) {
+              final item = feed.items[i];
+              if (item.isVideo) {
+                return _VideoPage(key: ValueKey(item.id), photo: item, active: i == _index, onTap: () => setState(() => _chrome = !_chrome));
+              }
+              return GestureDetector(
                 onTap: () => setState(() => _chrome = !_chrome),
+                child: InteractiveViewer(
+                  maxScale: 5,
+                  child: Center(
+                    child: NetImage(item.previewUrl, cacheKey: '${item.id}:preview', fit: BoxFit.contain),
+                  ),
+                ),
               );
-            }
-            return GestureDetector(
-              onTap: () => setState(() => _chrome = !_chrome),
-              child: InteractiveViewer(
-                maxScale: 5,
-                child: Center(child: NetImage(item.previewUrl, cacheKey: '${item.id}:preview', fit: BoxFit.contain)),
+            },
+          ),
+          AnimatedOpacity(
+            opacity: _chrome ? 1 : 0,
+            duration: const Duration(milliseconds: 150),
+            child: IgnorePointer(
+              ignoring: !_chrome,
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        IconButton(tooltip: 'Close', color: Colors.white, icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                        Text(
+                          '${_index + 1} of ${feed.items.length}${feed.done ? '' : '+'}',
+                          style: const TextStyle(color: Colors.white70, fontSize: 14, fontFeatures: Ds.tabular),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          tooltip: photo.favorite ? 'Remove from favourites' : 'Add to favourites',
+                          color: photo.favorite ? DsColors.dark.ac : Colors.white,
+                          icon: Icon(photo.favorite ? Icons.favorite : Icons.favorite_border),
+                          onPressed: _toggleFavorite,
+                        ),
+                        IconButton(
+                          tooltip: 'Save to phone',
+                          color: Colors.white,
+                          icon: const Icon(Icons.download_outlined),
+                          onPressed: () => saveToGallery(context, [photo]),
+                        ),
+                        if (canDelete) IconButton(tooltip: 'Delete', color: Colors.white, icon: const Icon(Icons.delete_outline), onPressed: _delete),
+                        IconButton(tooltip: 'Details', color: Colors.white, icon: const Icon(Icons.info_outline), onPressed: _info),
+                      ],
+                    ),
+                    const Spacer(),
+                    if (photo.people.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Wrap(
+                          spacing: 6,
+                          children: [
+                            // Badges drawn with the dark tokens: they sit on the dark stage.
+                            for (final person in photo.people)
+                              Theme(
+                                data: buildTheme(Brightness.dark),
+                                child: DsBadge(person['kind'] == 'self' ? 'You' : '${person['name']}', tone: DsTone.accent),
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            );
-          },
-        ),
-        AnimatedOpacity(
-          opacity: _chrome ? 1 : 0,
-          duration: const Duration(milliseconds: 150),
-          child: IgnorePointer(
-            ignoring: !_chrome,
-            child: SafeArea(
-              child: Column(children: [
-                Row(children: [
-                  IconButton(tooltip: 'Close', color: Colors.white, icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
-                  Text('${_index + 1} of ${feed.items.length}${feed.done ? '' : '+'}', style: const TextStyle(color: Colors.white70)),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: photo.favorite ? 'Remove from favourites' : 'Add to favourites',
-                    color: photo.favorite ? Palette.dark.accent : Colors.white,
-                    icon: Icon(photo.favorite ? Icons.favorite : Icons.favorite_border),
-                    onPressed: _toggleFavorite,
-                  ),
-                  IconButton(tooltip: 'Save to phone', color: Colors.white, icon: const Icon(Icons.download_outlined), onPressed: () => saveToGallery(context, [photo])),
-                  if (canDelete) IconButton(tooltip: 'Delete', color: Colors.white, icon: const Icon(Icons.delete_outline), onPressed: _delete),
-                  IconButton(tooltip: 'Details', color: Colors.white, icon: const Icon(Icons.info_outline), onPressed: _info),
-                ]),
-                const Spacer(),
-                if (photo.people.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Wrap(spacing: 6, children: [
-                      for (final person in photo.people) Pill(person['kind'] == 'self' ? 'You' : '${person['name']}', tone: PillTone.accent),
-                    ]),
-                  ),
-              ]),
             ),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 }
@@ -485,53 +541,62 @@ class _VideoPageState extends State<_VideoPage> {
     final ready = c != null && c.value.isInitialized;
     return GestureDetector(
       onTap: widget.onTap,
-      child: Stack(alignment: Alignment.center, children: [
-        if (ready)
-          Center(child: AspectRatio(aspectRatio: c.value.aspectRatio, child: VideoPlayer(c)))
-        else
-          Positioned.fill(child: NetImage(widget.photo.previewUrl, cacheKey: '${widget.photo.id}:preview', fit: BoxFit.contain)),
-        if (_failed)
-          const Text("Couldn't play this video.", style: TextStyle(color: Colors.white70))
-        else if (c != null && !ready)
-          const CircularProgressIndicator(color: Colors.white70)
-        else if (!ready || !c.value.isPlaying)
-          IconButton.filled(
-            iconSize: 44,
-            style: IconButton.styleFrom(backgroundColor: Colors.black54, foregroundColor: Colors.white),
-            tooltip: 'Play',
-            icon: const Icon(Icons.play_arrow_rounded),
-            onPressed: widget.photo.originalUrl == null ? null : () => ready ? c.play() : _play(),
-          ),
-        if (ready)
-          Positioned(
-            left: 8,
-            right: 16,
-            bottom: 72,
-            child: SafeArea(
-              child: Row(children: [
-                IconButton(
-                  color: Colors.white,
-                  tooltip: c.value.isPlaying ? 'Pause' : 'Play',
-                  icon: Icon(c.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
-                  onPressed: () => c.value.isPlaying ? c.pause() : c.play(),
-                ),
-                Expanded(
-                  child: VideoProgressIndicator(
-                    c,
-                    allowScrubbing: true,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    colors: VideoProgressColors(playedColor: Palette.dark.accent, bufferedColor: Colors.white38, backgroundColor: Colors.white12),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  '${formatDuration(c.value.position)} / ${formatDuration(c.value.duration)}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 12, fontFeatures: [FontFeature.tabularFigures()]),
-                ),
-              ]),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (ready)
+            Center(
+              child: AspectRatio(aspectRatio: c.value.aspectRatio, child: VideoPlayer(c)),
+            )
+          else
+            Positioned.fill(
+              child: NetImage(widget.photo.previewUrl, cacheKey: '${widget.photo.id}:preview', fit: BoxFit.contain),
             ),
-          ),
-      ]),
+          if (_failed)
+            const Text("Couldn't play this video.", style: TextStyle(color: Colors.white70))
+          else if (c != null && !ready)
+            const CircularProgressIndicator(color: Colors.white70)
+          else if (!ready || !c.value.isPlaying)
+            IconButton.filled(
+              iconSize: 44,
+              style: IconButton.styleFrom(backgroundColor: Colors.black54, foregroundColor: Colors.white),
+              tooltip: 'Play',
+              icon: const Icon(Icons.play_arrow_rounded),
+              onPressed: widget.photo.originalUrl == null ? null : () => ready ? c.play() : _play(),
+            ),
+          if (ready)
+            Positioned(
+              left: 8,
+              right: 16,
+              bottom: 72,
+              child: SafeArea(
+                child: Row(
+                  children: [
+                    IconButton(
+                      color: Colors.white,
+                      tooltip: c.value.isPlaying ? 'Pause' : 'Play',
+                      icon: Icon(c.value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                      onPressed: () => c.value.isPlaying ? c.pause() : c.play(),
+                    ),
+                    Expanded(
+                      child: VideoProgressIndicator(
+                        c,
+                        allowScrubbing: true,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        colors: VideoProgressColors(playedColor: DsColors.dark.ac, bufferedColor: Colors.white38, backgroundColor: Colors.white12),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      '${formatDuration(c.value.position)} / ${formatDuration(c.value.duration)}',
+                      style: const TextStyle(color: Colors.white70, fontSize: 12, fontFeatures: Ds.tabular),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

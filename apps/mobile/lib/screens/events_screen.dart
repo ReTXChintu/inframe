@@ -30,10 +30,7 @@ class _EventsScreenState extends State<EventsScreen> {
 
   Future<void> _load() async {
     try {
-      final results = await Future.wait([
-        api.get<Map<String, dynamic>>('/api/events'),
-        api.get<Map<String, dynamic>>('/api/invites'),
-      ]);
+      final results = await Future.wait([api.get<Map<String, dynamic>>('/api/events'), api.get<Map<String, dynamic>>('/api/invites')]);
       if (!mounted) return;
       setState(() {
         _events = (results[0]['events'] as List).map((e) => EventSummary(Map<String, dynamic>.from(e as Map))).toList();
@@ -69,11 +66,11 @@ class _EventsScreenState extends State<EventsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     final events = _events;
     return Scaffold(
       appBar: AppBar(
-        title: const Logo(size: 20),
+        title: const Logo(),
         actions: [
           IconButton(
             tooltip: 'Join with a code',
@@ -88,8 +85,6 @@ class _EventsScreenState extends State<EventsScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: p.ink,
-        foregroundColor: p.bg,
         icon: const Icon(Icons.add),
         label: const Text('New event'),
         onPressed: () async {
@@ -101,43 +96,34 @@ class _EventsScreenState extends State<EventsScreen> {
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
+          padding: EdgeInsets.fromLTRB(Ds.pagePad(context), 8, Ds.pagePad(context), 96),
           children: [
-            Text('Your events', style: Theme.of(context).textTheme.headlineMedium),
+            Text('Your events', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 4),
-            Text("Trips, weddings and parties you're part of.", style: TextStyle(color: p.muted)),
+            Text("Trips, weddings and parties you're part of.", style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: p.tx3)),
             const SizedBox(height: 16),
             for (final inv in _invites) ...[
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: p.accentSoft,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: p.accent.withValues(alpha: 0.3)),
-                ),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Icon(Icons.mail_outline, color: p.accent, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text('${inv.invitedBy ?? 'Someone'} invited you to ${inv.eventName}',
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                    ),
-                  ]),
-                  if (inv.role == 'cohost') Padding(padding: const EdgeInsets.only(top: 4, left: 28), child: Text('as co-host', style: TextStyle(color: p.ink2))),
-                  const SizedBox(height: 10),
-                  Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              DsCallout(
+                icon: Icons.mail_outline,
+                title: '${inv.invitedBy ?? 'Someone'} invited you to ${inv.eventName}',
+                body: inv.role == 'cohost' ? 'as co-host' : null,
+                action: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     TextButton(onPressed: () => _respond(inv, false), child: const Text('Decline')),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 8),
                     FilledButton(onPressed: () => _respond(inv, true), child: const Text('Join')),
-                  ]),
-                ]),
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
             ],
             if (_error != null) ErrorBox(_error),
             if (events == null && _error == null)
-              const Padding(padding: EdgeInsets.all(48), child: Center(child: CircularProgressIndicator()))
+              const Padding(
+                padding: EdgeInsets.all(48),
+                child: Center(child: CircularProgressIndicator()),
+              )
             else if (events != null && events.isEmpty)
               EmptyView(
                 icon: Icons.photo_camera_outlined,
@@ -154,10 +140,29 @@ class _EventsScreenState extends State<EventsScreen> {
                 ),
               )
             else if (events != null)
-              for (final e in events) ...[
-                _EventCard(event: e, onTap: () => _open(e.id)),
-                const SizedBox(height: 14),
-              ],
+              // Full width: one column on phones, more as the screen widens.
+              LayoutBuilder(
+                builder: (context, box) {
+                  final cols = box.maxWidth >= 1000
+                      ? 3
+                      : box.maxWidth >= 600
+                      ? 2
+                      : 1;
+                  const gap = 16.0;
+                  final w = (box.maxWidth - gap * (cols - 1)) / cols;
+                  return Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: [
+                      for (final e in events)
+                        SizedBox(
+                          width: w,
+                          child: _EventCard(event: e, onTap: () => _open(e.id)),
+                        ),
+                    ],
+                  );
+                },
+              ),
           ],
         ),
       ),
@@ -172,65 +177,75 @@ class _EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     final range = formatRange(event.startsOn, event.endsOn);
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          AspectRatio(
-            aspectRatio: 16 / 9,
-            child: Stack(fit: StackFit.expand, children: [
-              event.coverUrl != null
-                  ? NetImage(event.coverUrl, cacheKey: 'cover:${event.id}:${event.coverUrl!.split('?').first}')
-                  : ColoredBox(color: p.surface2, child: Icon(Icons.photo_camera_outlined, size: 40, color: p.muted)),
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(begin: Alignment.center, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black54]),
-                ),
-              ),
-              Positioned(
-                left: 14,
-                bottom: 12,
-                child: Text((kindLabels[event.kind] ?? 'Event').toUpperCase(),
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, letterSpacing: 1.6, fontSize: 12)),
-              ),
-              if (event.myCount > 0)
-                Positioned(
-                  right: 12,
-                  top: 12,
-                  child: Transform.rotate(
-                    angle: 0.03,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(color: p.accent, borderRadius: BorderRadius.circular(99)),
-                      child: Text("You're in ${event.myCount}", style: TextStyle(color: p.accentInk, fontWeight: FontWeight.w800, fontSize: 12)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  event.coverUrl != null
+                      ? NetImage(event.coverUrl, cacheKey: 'cover:${event.id}:${event.coverUrl!.split('?').first}')
+                      : ColoredBox(
+                          color: p.sunk,
+                          child: Icon(Icons.photo_camera_outlined, size: 40, color: p.tx3),
+                        ),
+                  // The photo is the hero: only a quiet accent badge sits on it.
+                  if (event.myCount > 0)
+                    Positioned(
+                      right: 12,
+                      top: 12,
+                      child: Container(
+                        height: 24,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(color: p.ac, borderRadius: BorderRadius.circular(Ds.rSm)),
+                        child: Text(
+                          "You're in ${event.myCount}",
+                          style: TextStyle(color: p.acTx, fontWeight: FontWeight.w600, fontSize: 12, fontFeatures: Ds.tabular),
+                        ),
+                      ),
                     ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(kindLabels[event.kind] ?? 'Event', style: Theme.of(context).textTheme.labelMedium),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Expanded(child: Text(event.name, style: Theme.of(context).textTheme.titleSmall)),
+                      if (event.role != 'member') ...[const SizedBox(width: 8), DsBadge(roleLabels[event.role] ?? event.role)],
+                    ],
                   ),
-                ),
-            ]),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Expanded(child: Text(event.name, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
-                if (event.role != 'member') Pill(roleLabels[event.role] ?? event.role),
-              ]),
-              const SizedBox(height: 6),
-              Wrap(spacing: 14, runSpacing: 4, children: [
-                if (range != null) _Meta(icon: Icons.calendar_today_outlined, text: range),
-                _Meta(icon: Icons.photo_outlined, text: plural(event.photoCount, 'photo')),
-                _Meta(icon: Icons.people_outline, text: '${event.memberCount}'),
-                if (event.external case final link? when link.isTrippin && link.linked)
-                  const _Meta(icon: Icons.luggage_outlined, text: 'Trippin'),
-                if (event.storagePending && event.role == 'owner')
-                  _Meta(icon: Icons.create_new_folder_outlined, text: 'Connect a folder', color: p.warn),
-              ]),
-            ]),
-          ),
-        ]),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 14,
+                    runSpacing: 4,
+                    children: [
+                      if (range != null) _Meta(icon: Icons.calendar_today_outlined, text: range),
+                      _Meta(icon: Icons.photo_outlined, text: plural(event.photoCount, 'photo')),
+                      _Meta(icon: Icons.people_outline, text: '${event.memberCount}'),
+                      if (event.external case final link? when link.isTrippin && link.linked) const _Meta(icon: Icons.luggage_outlined, text: 'Trippin'),
+                      if (event.storagePending && event.role == 'owner') _Meta(icon: Icons.create_new_folder_outlined, text: 'Connect a folder', color: p.warn),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -244,11 +259,17 @@ class _Meta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? Palette.of(context).muted;
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 14, color: c),
-      const SizedBox(width: 4),
-      Text(text, style: TextStyle(color: c, fontSize: 13)),
-    ]);
+    final c = color ?? DsColors.of(context).tx3;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: c),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: TextStyle(color: c, fontSize: 13, height: 18 / 13, fontFeatures: Ds.tabular),
+        ),
+      ],
+    );
   }
 }

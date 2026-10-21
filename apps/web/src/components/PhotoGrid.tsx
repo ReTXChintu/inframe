@@ -22,6 +22,10 @@ export function usePhotoFeed(key: unknown[], url: string | null) {
   return { ...query, photos };
 }
 
+/** Bleeds through the shell's side padding (16 / 24 / 32) so the photos run edge to edge. */
+const GRID =
+  "-mx-4 grid grid-cols-3 gap-0.5 sm:-mx-6 sm:grid-cols-4 md:grid-cols-5 lg:-mx-8 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 min-[1800px]:grid-cols-10";
+
 interface GridProps {
   photos: Photo[];
   selected: Set<string>;
@@ -50,7 +54,8 @@ export function PhotoGrid({ photos, selected, onToggle, onOpen, hasMore, loadMor
 
   return (
     <>
-      <ul className="grid grid-cols-3 gap-1 sm:grid-cols-4 sm:gap-1.5 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8" aria-label="Photos">
+      {/* Photos are the hero: a dense grid, edge to edge (it bleeds through the page padding), 2 px gutters. */}
+      <ul className={GRID} aria-label="Photos">
         {photos.map((p, i) => {
           const isSelected = selected.has(p.id);
           const mine = p.people.length > 0;
@@ -60,20 +65,20 @@ export function PhotoGrid({ photos, selected, onToggle, onOpen, hasMore, loadMor
                 type="button"
                 onClick={(e) => (selecting ? onToggle(p, e.shiftKey) : onOpen(i))}
                 className={cx(
-                  "group relative block size-full overflow-hidden rounded-[10px] bg-surface-2 transition-transform",
-                  isSelected && "scale-[0.92] ring-2 ring-accent ring-offset-2 ring-offset-bg",
+                  "group relative block size-full overflow-hidden bg-sunk transition-[transform,border-radius] duration-200 ease-ds focus-visible:outline-offset-[-3px]",
+                  isSelected && "scale-[0.86] rounded-md shadow-[0_0_0_2px_var(--ac)]",
                 )}
                 aria-label={`${p.originalName}${mine ? `, with ${p.people.map((x) => x.name).join(", ")}` : ""}`}
               >
                 {p.thumbUrl ? (
                   <img src={p.thumbUrl} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
                 ) : (
-                  <span className="flex size-full items-center justify-center text-muted">
+                  <span className="flex size-full items-center justify-center text-tx3">
                     {p.mediaType === "video" ? <Film className="size-6" /> : <ImageOff className="size-6" />}
                   </span>
                 )}
                 {p.mediaType === "video" && (
-                  <span className="pointer-events-none absolute top-1.5 right-1.5 flex items-center gap-0.5 rounded-full bg-black/55 py-0.5 pr-1.5 pl-1 text-[10px] font-semibold text-white tabular-nums">
+                  <span className="num pointer-events-none absolute top-1.5 right-1.5 flex h-5 items-center gap-0.5 rounded-sm bg-black/55 pr-1.5 pl-1 text-[11px] font-semibold text-white">
                     <Play className="size-3 fill-white" />
                     {formatDuration(p.durationMs) || "Video"}
                   </span>
@@ -84,7 +89,7 @@ export function PhotoGrid({ photos, selected, onToggle, onOpen, hasMore, loadMor
                   </span>
                 )}
               </button>
-              {/* Selection checkbox: always visible while selecting, on hover otherwise */}
+              {/* Selection checkbox (§7.2 custom checkbox, in a 40 px hit area): always visible while selecting, on hover otherwise */}
               <button
                 type="button"
                 role="checkbox"
@@ -92,17 +97,23 @@ export function PhotoGrid({ photos, selected, onToggle, onOpen, hasMore, loadMor
                 aria-label={`Select ${p.originalName}`}
                 onClick={(e) => onToggle(p, e.shiftKey)}
                 className={cx(
-                  "absolute top-1.5 left-1.5 flex size-6 items-center justify-center rounded-full border-2 transition-opacity",
-                  isSelected ? "border-accent bg-accent text-accent-ink" : "border-white/90 bg-black/20 text-transparent",
+                  "absolute top-0 left-0 flex size-10 items-center justify-center transition-opacity focus-visible:outline-offset-[-3px]",
                   selecting || isSelected ? "opacity-100" : "opacity-0 group-hover/tile:opacity-100 focus-visible:opacity-100",
                 )}
               >
-                <Check className="size-3.5" strokeWidth={3} />
+                <span
+                  className={cx(
+                    "flex size-[22px] items-center justify-center rounded-[7px] border-[1.5px]",
+                    isSelected ? "border-ac bg-ac text-ac-tx" : "border-white bg-black/25 text-transparent",
+                  )}
+                >
+                  <Check className="size-3.5" />
+                </span>
               </button>
-              <span className="pointer-events-none absolute right-1.5 bottom-1.5 flex gap-1">
+              <span className="pointer-events-none absolute right-1.5 bottom-1.5 flex items-center gap-1">
                 {mine && (
-                  <span className="rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold text-accent-ink shadow" title="You're in this">
-                    {p.people.some((x) => x.kind === "self") ? "YOU" : p.people[0]!.name.split(" ")[0]!.toUpperCase()}
+                  <span className="inline-flex h-[18px] items-center rounded-xs bg-ac px-1.5 text-[11px] font-semibold text-ac-tx" title="You're in this">
+                    {p.people.some((x) => x.kind === "self") ? "You" : p.people[0]!.name.split(" ")[0]!}
                   </span>
                 )}
                 {p.favorite && <Heart className="size-4 fill-white text-white drop-shadow" aria-label="Favourite" />}
@@ -123,9 +134,9 @@ export function PhotoGrid({ photos, selected, onToggle, onOpen, hasMore, loadMor
 
 export function GridSkeleton() {
   return (
-    <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 sm:gap-1.5 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8">
+    <div className={GRID} aria-busy="true" aria-label="Loading photos">
       {Array.from({ length: 18 }, (_, i) => (
-        <div key={i} className="skeleton aspect-square rounded-[10px]" />
+        <div key={i} className="skeleton aspect-square" />
       ))}
     </div>
   );

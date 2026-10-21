@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth";
 import type { AdminSettings, SettingKey } from "@/lib/types";
 import { errorMessage, useFeedback } from "@/components/feedback";
 import { ProviderMark } from "@/components/StoragePicker";
-import { Badge, Button, Card, PasswordField, Spinner, TextField, Toggle } from "@/components/ui";
+import { Badge, Button, Card, IconTile, PasswordField, Spinner, TextField, Toggle } from "@/components/ui";
 
 type Draft = Partial<Record<SettingKey, string | boolean>>;
 type TestResult = { ok: true; detail: string } | { ok: false; detail: string } | null;
@@ -38,17 +38,17 @@ function AdminContent() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <p className="inline-flex items-center gap-1.5 text-[12px] font-semibold tracking-[0.14em] text-accent uppercase">
-          <ShieldCheck className="size-4" /> Super admin
-        </p>
-        <h1 className="mt-1 text-3xl font-semibold sm:text-4xl">Admin</h1>
-        <p className="mt-1.5 text-[15px] text-muted">
+        <Badge tone="accent">
+          <ShieldCheck /> Super admin
+        </Badge>
+        <h1 className="mt-2 text-title-page">Admin</h1>
+        <p className="mt-1 text-body-l text-tx2">
           Server-wide settings. Changes apply immediately. Values you save here override the server's .env file.
         </p>
       </div>
 
       {overview.data && (
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3">
           {(
             [
               ["users", "Users"],
@@ -59,11 +59,11 @@ function AdminContent() {
               ["failed", "Failed"],
             ] as const
           ).map(([k, label]) => (
-            <Card key={k} className="px-3 py-3">
-              <p className={`font-display text-2xl font-semibold tabular-nums ${k === "failed" && overview.data[k] ? "text-danger" : ""}`}>
+            <Card key={k} className="flex flex-col gap-1.5 p-4">
+              <p className={`num order-2 text-title-page ${k === "failed" && overview.data[k] ? "text-crit" : ""}`}>
                 {overview.data[k]?.toLocaleString() ?? "—"}
               </p>
-              <p className="text-[12px] text-muted">{label}</p>
+              <p className="order-1 text-label text-tx2">{label}</p>
             </Card>
           ))}
         </div>
@@ -172,15 +172,15 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <Card className="p-5 sm:p-6">
+    <Card className="p-5">
       <div className="flex items-start gap-3">
-        <span className="mt-0.5">{icon}</span>
+        {icon}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold">{title}</h2>
+            <h2 className="text-title-section">{title}</h2>
             {status}
           </div>
-          <p className="mt-1 text-[14px] text-muted">{description}</p>
+          <p className="mt-1 text-body text-tx2">{description}</p>
         </div>
       </div>
       <div className="mt-5">{children}</div>
@@ -204,10 +204,10 @@ function Actions({
   const { confirm } = useFeedback();
   const canReset = Object.keys(section.resetBody).length > 0;
   return (
-    <div className="flex flex-col gap-3 border-t border-line pt-4">
+    <div className="flex flex-col gap-3 border-t border-ln pt-4">
       {result && (
-        <p role="status" className={`flex items-start gap-2 rounded-xl px-3.5 py-2.5 text-[14px] ${result.ok ? "bg-ok-soft text-ok" : "bg-danger-soft text-danger"}`}>
-          {result.ok ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" /> : <XCircle className="mt-0.5 size-4 shrink-0" />}
+        <p role="status" className={`flex items-start gap-2 rounded-lg px-3.5 py-2.5 text-body font-medium ${result.ok ? "bg-good-soft text-good" : "bg-crit-soft text-crit"}`}>
+          {result.ok ? <CheckCircle2 className="mt-0.5 size-5 shrink-0" /> : <XCircle className="mt-0.5 size-5 shrink-0" />}
           <span className="break-words">{result.detail}</span>
         </p>
       )}
@@ -227,11 +227,11 @@ function Actions({
         )}
         <div className="ml-auto flex gap-2">
           {onTest && (
-            <Button variant="secondary" onClick={onTest} loading={testing}>
+            <Button variant="secondary" size="lg" onClick={onTest} loading={testing}>
               {testLabel}
             </Button>
           )}
-          <Button type="submit" disabled={!section.dirty} loading={section.save.isPending}>
+          <Button type="submit" size="lg" disabled={!section.dirty} loading={section.save.isPending}>
             Save
           </Button>
         </div>
@@ -264,11 +264,11 @@ function ModelSection({ data }: { data: AdminSettings }) {
 
   return (
     <SectionCard
-      icon={<ScanFace className="size-6" />}
+      icon={<IconTile tone="accent"><ScanFace /></IconTile>}
       title="Face model"
       description={
         <>
-          InFrame sends images to <code className="rounded bg-surface-2 px-1">POST {"{URL}"}/extract</code> and expects 512-number face
+          InFrame sends images to <code className="rounded-xs bg-sunk px-1 font-mono text-[13px]">POST {"{URL}"}/extract</code> and expects 512-number face
           embeddings back.
         </>
       }
@@ -286,6 +286,7 @@ function ModelSection({ data }: { data: AdminSettings }) {
         />
         <div className="grid gap-4 sm:grid-cols-[1fr_200px]">
           <PasswordField
+            noun="key"
             label="API key (optional)"
             autoComplete="off"
             placeholder={s["model.apiKey"].set ? "Saved — type to replace" : "None"}
@@ -312,8 +313,8 @@ function ModelSection({ data }: { data: AdminSettings }) {
             error={fields["model.timeoutMs"]}
           />
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="threshold" className="text-[13px] font-medium text-ink-2">
-              Match strictness · <span className="tabular-nums">{threshold.toFixed(2)}</span>
+            <label htmlFor="threshold" className="text-label text-tx2">
+              Match strictness · <span className="num">{threshold.toFixed(2)}</span>
             </label>
             <input
               id="threshold"
@@ -323,11 +324,11 @@ function ModelSection({ data }: { data: AdminSettings }) {
               step={0.01}
               value={threshold}
               onChange={(e) => set("model.matchThreshold", e.target.value)}
-              className="h-11 accent-[var(--accent)]"
+              className="h-13 accent-[var(--ac)]"
             />
-            <p className="text-[13px] text-muted">
+            <p className="text-caption text-tx3">
               Higher = fewer wrong matches, but more missed photos. 0.50 suits most models.
-              {fields["model.matchThreshold"] && <span className="block text-danger">{fields["model.matchThreshold"]}</span>}
+              {fields["model.matchThreshold"] && <span className="block text-crit">{fields["model.matchThreshold"]}</span>}
             </p>
           </div>
         </div>
@@ -350,21 +351,21 @@ function GoogleSection({ data }: { data: AdminSettings }) {
   };
   return (
     <SectionCard
-      icon={<ProviderMark provider="gdrive" className="size-6" />}
+      icon={<IconTile tone="neutral"><ProviderMark provider="gdrive" /></IconTile>}
       title="Google Drive"
       description="Lets event owners connect their Google Drive for storage. It's not used for signing in."
       status={enabled ? <Badge tone="ok">Configured</Badge> : <Badge tone="warn">Not set up</Badge>}
     >
       <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
-        <ol className="list-decimal space-y-1 rounded-2xl bg-surface-2 py-3 pr-4 pl-9 text-[14px] text-ink-2">
+        <ol className="list-decimal space-y-1 rounded-lg bg-sunk py-3 pr-4 pl-9 text-body text-tx2">
           <li>Google Cloud console → enable the <strong>Google Drive API</strong>.</li>
           <li>Set up the OAuth consent screen (in Testing, add your Google accounts as test users).</li>
           <li>
             Credentials → <strong>OAuth client ID</strong> → Web application, with this redirect URI:
           </li>
         </ol>
-        <div className="flex items-center gap-2 rounded-xl border border-line bg-surface p-1 pl-3">
-          <code className="min-w-0 flex-1 truncate text-[13px]">{data.googleRedirectUri}</code>
+        <div className="flex items-center gap-2 rounded-md border border-ln2 bg-sf2 p-1 pl-3">
+          <code className="min-w-0 flex-1 truncate font-mono text-[13px] text-tx2">{data.googleRedirectUri}</code>
           <Button
             size="sm"
             variant="secondary"
@@ -389,6 +390,7 @@ function GoogleSection({ data }: { data: AdminSettings }) {
           autoComplete="off"
         />
         <PasswordField
+          noun="secret"
           label="Client secret"
           autoComplete="off"
           placeholder={s["google.clientSecret"].set ? "Saved — type to replace" : ""}
@@ -421,7 +423,7 @@ function SmtpSection({ data }: { data: AdminSettings }) {
   };
   return (
     <SectionCard
-      icon={<Mail className="size-6" />}
+      icon={<IconTile tone="accent"><Mail /></IconTile>}
       title="Email (SMTP)"
       description="Used for event invites. While it's not set up, emails are written to the server log instead."
       status={s["smtp.host"].set ? <Badge tone="ok">Configured</Badge> : <Badge tone="warn">Not set up</Badge>}

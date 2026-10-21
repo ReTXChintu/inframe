@@ -44,7 +44,7 @@ class _MyPhotosScreenState extends State<MyPhotosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     final people = _people;
     return Scaffold(
       appBar: _selected.isEmpty
@@ -62,71 +62,86 @@ class _MyPhotosScreenState extends State<MyPhotosScreen> {
             ),
       body: RefreshIndicator(
         onRefresh: _load,
-        child: CustomScrollView(slivers: [
-          if (people == null)
-            const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
-          else if (people.isEmpty)
-            const SliverFillRemaining(
-              hasScrollBody: false,
-              child: EmptyView(
-                icon: Icons.face_outlined,
-                title: 'Add a selfie to see your photos',
-                body: 'InFrame looks for you in every event you join. Add your selfie — and your family\'s — on the People tab.',
-              ),
-            )
-          else ...[
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child: Text('From every event you\'re part of.', style: TextStyle(color: p.muted)),
-              ),
-            ),
-            if (people.length > 1)
+        child: CustomScrollView(
+          slivers: [
+            if (people == null)
+              const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
+            else if (people.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: EmptyView(
+                  icon: Icons.face_outlined,
+                  title: 'Add a selfie to see your photos',
+                  body: 'InFrame looks for you in every event you join. Add your selfie — and your family\'s — on the People tab.',
+                ),
+              )
+            else ...[
               SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 50,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    children: [
-                      for (final person in people)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ChoiceChip(
-                            selected: person.id == _personId,
-                            avatar: PersonAvatar(name: person.name, url: person.selfieUrl, size: 24, cacheKey: person.selfieCacheKey),
-                            label: Text(
-                              '${person.isSelf ? 'You' : person.name}  ${person.matchCount}',
-                              style: TextStyle(color: person.id == _personId ? p.bg : p.ink2),
-                            ),
-                            onSelected: (_) {
-                              setState(() {
-                                _personId = person.id;
-                                _selected.clear();
-                              });
-                              _feed.refresh('/api/me/photos?personId=${person.id}');
-                            },
-                          ),
-                        ),
-                    ],
-                  ),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(Ds.pagePad(context), 0, Ds.pagePad(context), 8),
+                  child: Text('From every event you\'re part of.', style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: p.tx3)),
                 ),
               ),
-            if (_feed.items.isEmpty && !_feed.loading)
-              const SliverToBoxAdapter(
-                child: EmptyView(icon: Icons.photo_library_outlined, title: 'No photos yet', body: "They'll appear here as soon as someone adds a photo to one of your events."),
-              )
-            else
-              PhotoGridSliver(
-                feed: _feed,
-                selected: _selected,
-                showEvent: true,
-                onToggle: (photo) => setState(() => _selected.contains(photo.id) ? _selected.remove(photo.id) : _selected.add(photo.id)),
-                onTap: (i) => Navigator.push(context, MaterialPageRoute(builder: (_) => PhotoViewer(feed: _feed, initialIndex: i))),
-              ),
-            if (_feed.loading) const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))),
+              if (people.length > 1)
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 52,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: EdgeInsets.symmetric(horizontal: Ds.pagePad(context)),
+                      children: [
+                        for (final person in people)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: DsChoiceChip(
+                              selected: person.id == _personId,
+                              avatar: PersonAvatar(name: person.name, url: person.selfieUrl, size: 24, cacheKey: person.selfieCacheKey),
+                              label: person.isSelf ? 'You' : person.name,
+                              count: person.matchCount,
+                              onSelected: () {
+                                setState(() {
+                                  _personId = person.id;
+                                  _selected.clear();
+                                });
+                                _feed.refresh('/api/me/photos?personId=${person.id}');
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (_feed.items.isEmpty && !_feed.loading)
+                const SliverToBoxAdapter(
+                  child: EmptyView(
+                    icon: Icons.photo_library_outlined,
+                    title: 'No photos yet',
+                    body: "They'll appear here as soon as someone adds a photo to one of your events.",
+                  ),
+                )
+              else
+                PhotoGridSliver(
+                  feed: _feed,
+                  selected: _selected,
+                  showEvent: true,
+                  onToggle: (photo) => setState(() => _selected.contains(photo.id) ? _selected.remove(photo.id) : _selected.add(photo.id)),
+                  onTap: (i) => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PhotoViewer(feed: _feed, initialIndex: i),
+                    ),
+                  ),
+                ),
+              if (_feed.loading)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                ),
+            ],
           ],
-        ]),
+        ),
       ),
     );
   }

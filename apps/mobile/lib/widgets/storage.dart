@@ -11,10 +11,10 @@ Future<List<Connection>> loadConnections() async {
 }
 
 IconData providerIcon(String provider) => switch (provider) {
-      'gdrive' => Icons.add_to_drive,
-      'mega' => Icons.cloud_outlined,
-      _ => Icons.memory,
-    };
+  'gdrive' => Icons.add_to_drive,
+  'mega' => Icons.cloud_outlined,
+  _ => Icons.memory,
+};
 
 /// Where an event's photos go: one of the user's storage accounts, and a new
 /// folder or an existing one. The body of `{connectionId, folder}` that
@@ -76,8 +76,7 @@ class _StoragePickerState extends State<StoragePicker> {
     }
   }
 
-  void _report() =>
-      widget.onChanged(StorageChoice(connectionId: _connectionId, existingFolder: _existingFolder, folder: _folder.text));
+  void _report() => widget.onChanged(StorageChoice(connectionId: _connectionId, existingFolder: _existingFolder, folder: _folder.text));
 
   void _update(VoidCallback change) {
     setState(change);
@@ -86,88 +85,101 @@ class _StoragePickerState extends State<StoragePicker> {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     final connections = _connections;
     if (connections == null) {
-      return _error != null ? ErrorBox(_error) : const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()));
+      return _error != null
+          ? ErrorBox(_error)
+          : const Center(
+              child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()),
+            );
     }
     final selected = connections.where((c) => c.id == _connectionId).firstOrNull;
     final name = widget.newFolderName.trim();
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      RadioGroup<String>(
-        groupValue: _connectionId,
-        onChanged: (v) => _update(() => _connectionId = v),
-        child: Column(children: [
-          for (final c in connections)
-            RadioListTile<String>(
-              value: c.id,
-              enabled: !c.broken,
-              contentPadding: EdgeInsets.zero,
-              secondary: Icon(providerIcon(c.provider)),
-              title: Text(c.providerLabel),
-              subtitle: Text(c.broken ? 'Needs reconnecting' : c.accountLabel, overflow: TextOverflow.ellipsis),
-            ),
-        ]),
-      ),
-      if (connections.isEmpty)
-        Text('Connect a storage account to keep this event\'s photos in your own storage.', style: TextStyle(color: p.muted)),
-      const SizedBox(height: 8),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: OutlinedButton.icon(
-          icon: const Icon(Icons.cloud_outlined),
-          label: const Text('Connect MEGA'),
-          onPressed: () async {
-            final c = await connectMega(context);
-            if (c != null) {
-              _connectionId = c.id;
-              _load();
-            }
-          },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RadioGroup<String>(
+          groupValue: _connectionId,
+          onChanged: (v) => _update(() => _connectionId = v),
+          child: Column(
+            children: [
+              for (final c in connections)
+                RadioListTile<String>(
+                  value: c.id,
+                  enabled: !c.broken,
+                  contentPadding: EdgeInsets.zero,
+                  secondary: DsIconTile(providerIcon(c.provider), tone: c.broken ? DsTone.warn : DsTone.neutral),
+                  title: Text(c.providerLabel),
+                  subtitle: Text(
+                    c.broken ? 'Needs reconnecting' : c.accountLabel,
+                    overflow: TextOverflow.ellipsis,
+                    style: c.broken ? TextStyle(color: p.warn, fontWeight: FontWeight.w500) : null,
+                  ),
+                ),
+            ],
+          ),
         ),
-      ),
-      Padding(
-        padding: const EdgeInsets.only(top: 6),
-        child: Text('Google Drive is connected from the website (Settings → Storage).', style: TextStyle(color: p.muted, fontSize: 12)),
-      ),
-      if (selected != null) ...[
-        const Divider(height: 28),
-        SegmentedButton<bool>(
-          segments: const [
-            ButtonSegment(value: false, icon: Icon(Icons.create_new_folder_outlined), label: Text('New folder')),
-            ButtonSegment(value: true, icon: Icon(Icons.folder_open_outlined), label: Text('Existing')),
-          ],
-          selected: {_existingFolder},
-          onSelectionChanged: (s) => _update(() => _existingFolder = s.first),
+        if (connections.isEmpty)
+          Text(
+            'Connect a storage account to keep this event\'s photos in your own storage.',
+            style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: p.tx2),
+          ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.cloud_outlined),
+            label: const Text('Connect MEGA'),
+            onPressed: () async {
+              final c = await connectMega(context);
+              if (c != null) {
+                _connectionId = c.id;
+                _load();
+              }
+            },
+          ),
         ),
-        const SizedBox(height: 12),
-        if (_existingFolder)
-          TextField(
-            controller: _folder,
-            keyboardType: TextInputType.url,
-            onChanged: (_) => _update(() {}),
-            decoration: InputDecoration(
-              labelText: selected.provider == 'gdrive' ? 'Google Drive folder link' : 'MEGA folder link or path',
-              hintText: selected.provider == 'gdrive' ? 'https://drive.google.com/drive/folders/…' : 'https://mega.nz/folder/… or Trips/Goa',
-              helperText: 'Photos already in it are added too. Sub-folders become albums.',
-              helperMaxLines: 2,
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(
+            'Google Drive is connected from the website (Settings → Storage).',
+            style: TextStyle(color: p.tx3, fontSize: 12, height: 16 / 12),
+          ),
+        ),
+        if (selected != null) ...[
+          const Divider(height: 32),
+          DsSegmented<bool>(
+            label: 'Folder',
+            value: _existingFolder,
+            options: const [(false, 'New folder', Icons.create_new_folder_outlined), (true, 'Existing', Icons.folder_open_outlined)],
+            onChanged: (v) => _update(() => _existingFolder = v),
+          ),
+          const SizedBox(height: 12),
+          if (_existingFolder)
+            DsTextField(
+              controller: _folder,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              onChanged: (_) => _update(() {}),
+              label: selected.provider == 'gdrive' ? 'Google Drive folder link' : 'MEGA folder link or path',
+              hint: selected.provider == 'gdrive' ? 'https://drive.google.com/drive/folders/…' : 'https://mega.nz/folder/… or Trips/Goa',
+              helper: 'Photos already in it are added too. Sub-folders become albums.',
+            )
+          else
+            Text(
+              'InFrame creates “InFrame · ${name.isEmpty ? 'event name' : name}” in your storage.',
+              style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: p.tx2),
             ),
-          )
-        else
-          Text('InFrame creates “InFrame · ${name.isEmpty ? 'event name' : name}” in your storage.', style: TextStyle(color: p.muted)),
+        ],
       ],
-    ]);
+    );
   }
 }
 
 /// Bottom sheet: sign in to MEGA. Returns the new connection.
 Future<Connection?> connectMega(BuildContext context) {
-  return showModalBottomSheet<Connection>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (_) => const _MegaSheet(),
-  );
+  return showModalBottomSheet<Connection>(context: context, isScrollControlled: true, showDragHandle: true, builder: (_) => const _MegaSheet());
 }
 
 class _MegaSheet extends StatefulWidget {
@@ -202,30 +214,38 @@ class _MegaSheetState extends State<_MegaSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
-      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('Connect MEGA', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 6),
-        Text(
-          'InFrame signs in to your MEGA account to save and read event photos. Your password is stored encrypted. '
-          "Accounts with two-factor login aren't supported.",
-          style: TextStyle(color: p.muted, fontSize: 13),
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + MediaQuery.viewInsetsOf(context).bottom + MediaQuery.paddingOf(context).bottom),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const DsIconTile(Icons.cloud_outlined),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Connect MEGA', style: Theme.of(context).textTheme.titleLarge)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'InFrame signs in to your MEGA account to save and read event photos. Your password is stored encrypted. '
+              "Accounts with two-factor login aren't supported.",
+              style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: p.tx2),
+            ),
+            const SizedBox(height: 16),
+            ErrorBox(_error),
+            if (_error != null) const SizedBox(height: 12),
+            DsTextField(controller: _email, keyboardType: TextInputType.emailAddress, autocorrect: false, label: 'MEGA email', error: _fields['email']),
+            const SizedBox(height: 16),
+            DsPasswordField(controller: _password, label: 'MEGA password', error: _fields['password'], onSubmitted: (_) => _submit()),
+            const SizedBox(height: 20),
+            BusyButton(label: 'Connect MEGA', busy: _busy, onPressed: _submit),
+          ],
         ),
-        const SizedBox(height: 16),
-        ErrorBox(_error),
-        if (_error != null) const SizedBox(height: 12),
-        TextField(
-          controller: _email,
-          keyboardType: TextInputType.emailAddress,
-          decoration: InputDecoration(labelText: 'MEGA email', errorText: _fields['email']),
-        ),
-        const SizedBox(height: 12),
-        PasswordField(controller: _password, label: 'MEGA password', error: _fields['password'], onSubmitted: (_) => _submit()),
-        const SizedBox(height: 18),
-        BusyButton(label: 'Connect MEGA', busy: _busy, onPressed: _submit),
-      ]),
+      ),
     );
   }
 }

@@ -1,206 +1,241 @@
 @import "tailwindcss";
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-sans/700.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
 
 /*
- * InFrame — "viewfinder" identity.
- * Warm paper + ink, one signal colour (the red of a camera's REC light),
- * and corner brackets that frame whatever matters on screen.
+ * InFrame on the shared iBoon design system (docs/design-system.md).
+ * Same neutrals, type, radii and components as SpendLog and Trippin; only the
+ * accent quad is InFrame's own violet. Photos are the hero: the chrome around
+ * them stays flat and quiet, and the photo viewer sits on its own dark stage.
  */
 :root {
-  --bg: #f4f2ec;
-  --surface: #ffffff;
-  --surface-2: #ebe8e0;
-  --ink: #17161b;
-  --ink-2: #3b3942;
-  --muted: #6f6a77;
-  --line: #e2ded5;
-  --accent: #f2542d;
-  --accent-ink: #ffffff;
-  --accent-soft: #fde8e1;
-  --ok: #1d8f61;
-  --ok-soft: #dcf2e8;
-  --warn: #b97300;
-  --warn-soft: #fbefd6;
-  --danger: #c93434;
-  --danger-soft: #fbe3e3;
-  --scrim: rgb(23 22 27 / 0.55);
-  --stage: #0d0c10;
   color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0f0e12;
-    --surface: #18171c;
-    --surface-2: #222027;
-    --ink: #f3f0ea;
-    --ink-2: #d4d0c9;
-    --muted: #9c97a5;
-    --line: #2c2a32;
-    --accent: #ff6a47;
-    --accent-ink: #160b08;
-    --accent-soft: #3a1d15;
-    --ok: #4cc493;
-    --ok-soft: #143326;
-    --warn: #e7a83a;
-    --warn-soft: #3a2a0c;
-    --danger: #f06b6b;
-    --danger-soft: #3d1717;
-    --scrim: rgb(0 0 0 / 0.65);
-    color-scheme: dark;
-  }
+  /* surfaces */
+  --canvas: #e4e1d8; --bg: #f4f2ec; --sf: #ffffff; --sf2: #faf9f5; --sunk: #ece9e1;
+  /* lines */
+  --ln: #e2ded4; --ln2: #c7c2b5;
+  /* ink */
+  --tx: #18191d; --tx2: #4c4d53; --tx3: #67686e;
+  /* accent: InFrame violet */
+  --ac: #6a3fc4; --ac-tx: #ffffff; --ac-soft: #eee8fb; --ac-line: #cfc0f1;
+  /* semantic */
+  --good: #15724a; --good-soft: #e1f0e6;
+  --warn: #8f5200; --warn-fill: #e39a2e; --warn-soft: #fbeed6;
+  --crit: #b3302a; --crit-fill: #d9473e; --crit-soft: #fbe5e2;
+  --hatch: #c7c2b5;
+  /* charts (c1 is always the app's accent) */
+  --c1: #6a3fc4; --c2: #c7792b; --c3: #2f8a7a; --c4: #b04a6f; --c5: #6a7a2f; --c-other: #8a8780;
+  /* elevation */
+  --shadow: 0 1px 2px rgba(24, 25, 29, 0.06), 0 2px 8px rgba(24, 25, 29, 0.05);
+  --shadow2: 0 16px 40px rgba(24, 25, 29, 0.18);
+  --scrim: rgba(24, 25, 29, 0.42);
+  /* motion */
+  --dur-fast: 120ms; --dur: 200ms; --dur-slow: 280ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1); --ease-exit: cubic-bezier(0.3, 0, 1, 1);
+  /* primary-button hover (§7.1) */
+  --ac-hover: color-mix(in srgb, var(--ac) 90%, var(--tx));
+  /* InFrame only: the always-dark backdrop of the photo viewer and selfie camera */
+  --stage: #0c0d0f;
+  --stage-sf: #1a1b1e;
+  --stage-ac: #bba4ff; /* the dark-theme accent, so it reads on the stage in either theme */
+  --stage-ac-tx: #1c0f3d;
 }
 
 :root[data-theme="dark"] {
-  --bg: #0f0e12;
-  --surface: #18171c;
-  --surface-2: #222027;
-  --ink: #f3f0ea;
-  --ink-2: #d4d0c9;
-  --muted: #9c97a5;
-  --line: #2c2a32;
-  --accent: #ff6a47;
-  --accent-ink: #160b08;
-  --accent-soft: #3a1d15;
-  --ok: #4cc493;
-  --ok-soft: #143326;
-  --warn: #e7a83a;
-  --warn-soft: #3a2a0c;
-  --danger: #f06b6b;
-  --danger-soft: #3d1717;
-  --scrim: rgb(0 0 0 / 0.65);
   color-scheme: dark;
+  --canvas: #08090a; --bg: #111214; --sf: #1a1b1e; --sf2: #202125; --sunk: #0c0d0f;
+  --ln: #2b2d32; --ln2: #3d3f46;
+  --tx: #edebe6; --tx2: #bebcb6; --tx3: #9a9893;
+  --ac: #bba4ff; --ac-tx: #1c0f3d; --ac-soft: #251d3d; --ac-line: #463878;
+  --good: #56c892; --good-soft: #12291d;
+  --warn: #f2b661; --warn-fill: #e9a240; --warn-soft: #2e2312;
+  --crit: #ff8c80; --crit-fill: #e45b50; --crit-soft: #341a19;
+  --hatch: #4a4c53;
+  --c1: #bba4ff;
+  --shadow: 0 0 0 1px rgba(255, 255, 255, 0.02);
+  --shadow2: 0 16px 40px rgba(0, 0, 0, 0.6);
+  --scrim: rgba(0, 0, 0, 0.6);
 }
 
+/* "System" theme: follow the OS unless the user picked one. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --canvas: #08090a; --bg: #111214; --sf: #1a1b1e; --sf2: #202125; --sunk: #0c0d0f;
+    --ln: #2b2d32; --ln2: #3d3f46;
+    --tx: #edebe6; --tx2: #bebcb6; --tx3: #9a9893;
+    --ac: #bba4ff; --ac-tx: #1c0f3d; --ac-soft: #251d3d; --ac-line: #463878;
+    --good: #56c892; --good-soft: #12291d;
+    --warn: #f2b661; --warn-fill: #e9a240; --warn-soft: #2e2312;
+    --crit: #ff8c80; --crit-fill: #e45b50; --crit-soft: #341a19;
+    --hatch: #4a4c53;
+    --c1: #bba4ff;
+    --shadow: 0 0 0 1px rgba(255, 255, 255, 0.02);
+    --shadow2: 0 16px 40px rgba(0, 0, 0, 0.6);
+    --scrim: rgba(0, 0, 0, 0.6);
+  }
+}
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme inline {
+  --color-canvas: var(--canvas);
   --color-bg: var(--bg);
-  --color-surface: var(--surface);
-  --color-surface-2: var(--surface-2);
-  --color-ink: var(--ink);
-  --color-ink-2: var(--ink-2);
-  --color-muted: var(--muted);
-  --color-line: var(--line);
-  --color-accent: var(--accent);
-  --color-accent-ink: var(--accent-ink);
-  --color-accent-soft: var(--accent-soft);
-  --color-ok: var(--ok);
-  --color-ok-soft: var(--ok-soft);
+  --color-sf: var(--sf);
+  --color-sf2: var(--sf2);
+  --color-sunk: var(--sunk);
+  --color-ln: var(--ln);
+  --color-ln2: var(--ln2);
+  --color-tx: var(--tx);
+  --color-tx2: var(--tx2);
+  --color-tx3: var(--tx3);
+  --color-ac: var(--ac);
+  --color-ac-tx: var(--ac-tx);
+  --color-ac-soft: var(--ac-soft);
+  --color-ac-line: var(--ac-line);
+  --color-ac-hover: var(--ac-hover);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
   --color-warn: var(--warn);
+  --color-warn-fill: var(--warn-fill);
   --color-warn-soft: var(--warn-soft);
-  --color-danger: var(--danger);
-  --color-danger-soft: var(--danger-soft);
+  --color-crit: var(--crit);
+  --color-crit-fill: var(--crit-fill);
+  --color-crit-soft: var(--crit-soft);
+  --color-hatch: var(--hatch);
   --color-scrim: var(--scrim);
   --color-stage: var(--stage);
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
-  --font-display: "Bricolage Grotesque Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --color-stage-sf: var(--stage-sf);
+  --color-stage-ac: var(--stage-ac);
+  --color-stage-ac-tx: var(--stage-ac-tx);
+  --color-c1: var(--c1); --color-c2: var(--c2); --color-c3: var(--c3);
+  --color-c4: var(--c4); --color-c5: var(--c5); --color-c-other: var(--c-other);
+
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* type scale: size / line-height / tracking / weight */
+  --text-display-xl: 44px;  --text-display-xl--line-height: 52px; --text-display-xl--letter-spacing: -0.02em; --text-display-xl--font-weight: 600;
+  --text-display-l: 40px;   --text-display-l--line-height: 48px;  --text-display-l--letter-spacing: -0.02em;  --text-display-l--font-weight: 600;
+  --text-display-m: 34px;   --text-display-m--line-height: 40px;  --text-display-m--letter-spacing: -0.02em;  --text-display-m--font-weight: 600;
+  --text-display-s: 28px;   --text-display-s--line-height: 34px;  --text-display-s--letter-spacing: -0.02em;  --text-display-s--font-weight: 600;
+  --text-title-page: 22px;  --text-title-page--line-height: 28px; --text-title-page--font-weight: 600;
+  --text-title-l: 20px;     --text-title-l--line-height: 26px;    --text-title-l--font-weight: 600;
+  --text-title-m: 19px;     --text-title-m--line-height: 26px;    --text-title-m--font-weight: 600;
+  --text-title-section: 17px; --text-title-section--line-height: 24px; --text-title-section--font-weight: 600;
+  --text-title-card: 15px;  --text-title-card--line-height: 20px; --text-title-card--font-weight: 600;
+  --text-body-l: 15px;      --text-body-l--line-height: 22px;
+  --text-body: 14px;        --text-body--line-height: 20px;
+  --text-body-s: 13px;      --text-body-s--line-height: 18px;
+  --text-label: 12px;       --text-label--line-height: 16px;      --text-label--letter-spacing: 0.02em; --text-label--font-weight: 600;
+  --text-caption: 12px;     --text-caption--line-height: 16px;
+  --text-micro: 11px;       --text-micro--line-height: 14px;      --text-micro--font-weight: 600;
+
+  --radius-xs: 3px; --radius-sm: 6px; --radius-md: 10px; --radius-lg: 12px;
+  --radius-xl: 14px; --radius-2xl: 16px; --radius-3xl: 20px;
+
+  --shadow-1: var(--shadow);
+  --shadow-2: var(--shadow2);
+
+  --ease-ds: cubic-bezier(0.2, 0, 0, 1);
+  --breakpoint-tablet: 600px;
+  --breakpoint-desktop: 1024px;
+  --breakpoint-wide: 1440px;
+}
+
+@utility num {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+@utility hatch {
+  background: repeating-linear-gradient(135deg, var(--hatch) 0 2px, transparent 2px 6px);
+}
+@utility pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+@utility animate-rise {
+  animation: rise var(--dur-slow) var(--ease) both;
+}
+@utility animate-pop {
+  animation: pop var(--dur-slow) var(--ease) both;
 }
 
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
+    background: var(--bg);
+    color: var(--tx);
+    font: 14px/20px var(--font-sans);
   }
   body {
+    margin: 0;
     background: var(--bg);
-    color: var(--ink);
+    color: var(--tx);
     font-family: var(--font-sans);
-    font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
     min-height: 100dvh;
   }
-  h1,
-  h2,
-  h3 {
-    font-family: var(--font-display);
-    letter-spacing: -0.02em;
-    font-variation-settings: "opsz" 48;
+  a:not([class]) {
+    color: var(--ac);
+  }
+  a:not([class]):hover {
+    color: var(--tx);
   }
   :focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
+    outline: 3px solid var(--ac);
+    outline-offset: 3px;
   }
   ::selection {
-    background: var(--accent-soft);
+    background: var(--ac-soft);
+  }
+  /* Icon set (§7.15): Lucide-style, stroke 1.75; 2 at 12–14 px. */
+  svg.lucide {
+    stroke-width: 1.75;
+  }
+  svg.lucide:is(.size-3, .size-3\.5) {
+    stroke-width: 2;
   }
 }
 
 @layer components {
-  /* Viewfinder corner brackets around any element with .frame */
-  .frame {
-    position: relative;
-  }
-  .frame::before,
-  .frame::after {
-    content: "";
-    position: absolute;
-    inset: var(--frame-inset, 10px);
-    pointer-events: none;
-    border: 2px solid var(--frame-color, currentColor);
-    -webkit-mask:
-      linear-gradient(#000 0 0) top left / var(--frame-len, 18px) var(--frame-len, 18px) no-repeat,
-      linear-gradient(#000 0 0) top right / var(--frame-len, 18px) var(--frame-len, 18px) no-repeat,
-      linear-gradient(#000 0 0) bottom left / var(--frame-len, 18px) var(--frame-len, 18px) no-repeat,
-      linear-gradient(#000 0 0) bottom right / var(--frame-len, 18px) var(--frame-len, 18px) no-repeat;
-    mask:
-      linear-gradient(#000 0 0) top left / var(--frame-len, 18px) var(--frame-len, 18px) no-repeat,
-      linear-gradient(#000 0 0) top right / var(--frame-len, 18px) var(--frame-len, 18px) no-repeat,
-      linear-gradient(#000 0 0) bottom left / var(--frame-len, 18px) var(--frame-len, 18px) no-repeat,
-      linear-gradient(#000 0 0) bottom right / var(--frame-len, 18px) var(--frame-len, 18px) no-repeat;
-    border-radius: var(--frame-radius, 6px);
-  }
-  .frame::after {
-    display: none;
-  }
-
-  .rec-dot {
-    display: inline-block;
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 999px;
-    background: var(--accent);
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent);
-    animation: rec 1.8s ease-out infinite;
-  }
-
+  /* Loading placeholders: flat --sunk blocks with a gentle opacity pulse (no shimmer). */
   .skeleton {
-    background: linear-gradient(100deg, var(--surface-2) 30%, color-mix(in srgb, var(--surface-2) 60%, var(--surface)) 50%, var(--surface-2) 70%);
-    background-size: 300% 100%;
-    animation: shimmer 1.4s linear infinite;
+    background: var(--sunk);
+    animation: pulse-soft 1.2s ease-in-out infinite alternate;
+  }
+  /* 8px status dot (used for "checking the folder" and similar live states). */
+  .status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--ac);
+    flex-shrink: 0;
   }
 }
 
-@keyframes rec {
-  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
-  70%, 100% { box-shadow: 0 0 0 7px transparent; }
-}
-@keyframes shimmer {
-  to { background-position: -150% 0; }
+@keyframes pulse-soft {
+  from { opacity: 1; }
+  to { opacity: 0.6; }
 }
 @keyframes rise {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
 @keyframes pop {
-  0% { transform: scale(0.96); opacity: 0; }
-  100% { transform: none; opacity: 1; }
-}
-
-@utility animate-rise {
-  animation: rise 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-@utility animate-pop {
-  animation: pop 0.18s ease-out both;
-}
-@utility pb-safe {
-  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0.001ms !important;
+    animation-duration: 0ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
+    transition-duration: 0ms !important;
   }
 }

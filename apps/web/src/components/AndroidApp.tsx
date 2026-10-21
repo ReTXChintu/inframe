@@ -1,10 +1,21 @@
-import { Smartphone } from "lucide-react";
+import { Download, Smartphone } from "lucide-react";
 import { formatBytes } from "@/lib/format";
 import { useAndroidApp } from "@/lib/androidApp";
-import { Card, cx } from "./ui";
+import { Card, cx, IconTile } from "./ui";
 
-/** Compact header/menu link to the APK. Renders nothing until a release has published one. */
-export function AndroidAppLink({ className, label = "Get the app" }: { className?: string; label?: string }) {
+/**
+ * Compact link to the APK. Renders nothing until a release has published one.
+ * `button`: a 36 px secondary button; `menu`: a full-width row inside a menu or sidebar.
+ */
+export function AndroidAppLink({
+  className,
+  label = "Get the app",
+  look = "button",
+}: {
+  className?: string;
+  label?: string;
+  look?: "button" | "menu";
+}) {
   const { data } = useAndroidApp();
   if (!data) return null;
   return (
@@ -13,11 +24,13 @@ export function AndroidAppLink({ className, label = "Get the app" }: { className
       download
       title={`Download InFrame for Android ${data.version} (${formatBytes(data.size)})`}
       className={cx(
-        "inline-flex h-9 items-center gap-2 rounded-full border border-line bg-surface px-3.5 text-[13px] font-medium text-ink transition-colors hover:bg-surface-2",
+        look === "button"
+          ? "inline-flex h-9 items-center gap-2 rounded-md border border-ln2 bg-sf px-3 text-[13px] font-semibold text-tx transition-colors hover:bg-sf2"
+          : "flex h-10 w-full items-center gap-3 rounded-md px-3 text-[14px] font-medium text-tx2 transition-colors hover:bg-sf2 hover:text-tx",
         className,
       )}
     >
-      <Smartphone className="size-4" />
+      <Smartphone className={look === "button" ? "size-4" : "size-5"} />
       {label}
     </a>
   );
@@ -28,23 +41,23 @@ export function AndroidAppCard() {
   const { data } = useAndroidApp();
   if (!data) return null;
   return (
-    <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:p-6">
-      <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-ink text-bg">
-        <Smartphone className="size-6" />
-      </span>
+    <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+      <IconTile tone="accent">
+        <Smartphone />
+      </IconTile>
       <div className="min-w-0 flex-1">
-        <h2 className="text-lg font-semibold">InFrame for Android</h2>
-        <p className="mt-0.5 text-[14px] text-muted">
-          Version {data.version} · {formatBytes(data.size)}. Take selfies with your camera, scan join QR codes and upload straight from
-          your gallery. If Android asks, allow installing apps from your browser.
+        <h2 className="text-title-card">InFrame for Android</h2>
+        <p className="mt-0.5 text-body-s text-tx2">
+          <span className="num">Version {data.version} · {formatBytes(data.size)}</span>. Take selfies with your camera, scan join QR
+          codes and upload straight from your gallery. If Android asks, allow installing apps from your browser.
         </p>
       </div>
       <a
         href={data.url}
         download
-        className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-ink px-5 text-[15px] font-medium text-bg hover:bg-ink-2"
+        className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-lg bg-ac px-5 text-[15px] font-semibold text-ac-tx transition-colors hover:bg-ac-hover"
       >
-        <Smartphone className="size-4" /> Download APK
+        <Download className="size-[18px]" /> Download APK
       </a>
     </Card>
   );

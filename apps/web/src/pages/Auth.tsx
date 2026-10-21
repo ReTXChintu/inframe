@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router";
-import { LogIn } from "lucide-react";
+import { AlertTriangle, LogIn } from "lucide-react";
 import { safeNext } from "@/App";
-import { Button } from "@/components/ui";
+import { Button, IconTile } from "@/components/ui";
 
 /** What `/login?error=…` means, after the identity server sent someone back without a session. */
 const SIGN_IN_ERRORS: Record<string, string> = {
@@ -40,17 +40,25 @@ export function LoginPage() {
   }, []);
 
   return (
-    <div className="animate-rise">
-      <h1 className="text-3xl font-semibold">Welcome to InFrame</h1>
-      <p className="mt-2 text-[15px] text-muted">Sign in to see your events and the photos you're in.</p>
-      <div className="mt-8 flex flex-col gap-4">
-        {error && (
-          <p role="alert" className="rounded-xl bg-danger-soft px-3.5 py-2.5 text-[14px] text-danger">
-            {error}
-          </p>
-        )}
+    <div className="flex flex-col gap-6 animate-rise">
+      {error && (
+        // §7.5 alert card: --crit-soft, a 36 px icon tile, the title in --crit.
+        <div role="alert" className="flex items-start gap-3 rounded-xl bg-crit-soft p-4">
+          <IconTile tone="onTint" size={36} className="text-crit">
+            <AlertTriangle />
+          </IconTile>
+          <p className="min-w-0 flex-1 pt-2 text-title-card text-crit">{error}</p>
+        </div>
+      )}
+      {/* §6.2 auth card */}
+      <div className="flex flex-col gap-5 rounded-xl border border-ln bg-sf p-5 sm:p-8">
+        <div>
+          <h1 className="text-title-page">Welcome to InFrame</h1>
+          <p className="mt-1.5 text-body-l text-tx2">Sign in to see your events and the photos you're in.</p>
+        </div>
         <Button
-          size="lg"
+          size="xl"
+          className="w-full"
           icon={<LogIn className="size-5" />}
           loading={busy}
           onClick={() => {
@@ -60,7 +68,7 @@ export function LoginPage() {
         >
           Sign in with your account
         </Button>
-        <p className="text-[14px] text-muted">
+        <p className="rounded-lg bg-sunk px-3.5 py-3 text-body-s text-tx2">
           One account for InFrame, SpendLog and Trippin. New here? The same button creates your InFrame account.
         </p>
       </div>

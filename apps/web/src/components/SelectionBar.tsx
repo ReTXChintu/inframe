@@ -24,15 +24,16 @@ export function SelectionBar({
   const ids = [...selected];
   const allFav = photos.filter((p) => selected.has(p.id)).every((p) => p.favorite);
 
-  const action = "inline-flex h-10 items-center gap-2 rounded-full px-3.5 text-[13px] font-medium hover:bg-white/10 disabled:opacity-40";
+  // Inverse floating bar, built like the §7.12 toast: --tx fill, --bg text, radius 12, the floating shadow.
+  const action = "inline-flex h-10 items-center gap-2 rounded-md px-3 text-[13px] font-semibold transition-colors hover:bg-bg/10 disabled:opacity-40";
   return (
-    <div className="fixed inset-x-0 bottom-20 z-40 flex justify-center px-3 sm:bottom-6">
-      <div role="toolbar" aria-label="Selected photos" className="flex max-w-full items-center gap-0.5 overflow-x-auto rounded-full bg-ink p-1.5 text-bg shadow-2xl animate-rise">
+    <div className="fixed inset-x-0 bottom-20 z-40 flex justify-center px-4 sm:bottom-6 lg:pl-[264px]">
+      <div role="toolbar" aria-label="Selected photos" className="flex max-w-full items-center gap-0.5 overflow-x-auto rounded-lg bg-tx p-1.5 text-bg shadow-2 animate-rise">
         <button className={action} onClick={onClear} aria-label="Clear selection">
           <X className="size-4" />
-          <span className="tabular-nums">{plural(selected.size, "selected", "selected")}</span>
+          <span className="num">{plural(selected.size, "selected", "selected")}</span>
         </button>
-        <span className="mx-1 h-6 w-px bg-white/15" />
+        <span className="mx-1 h-6 w-px bg-bg/20" />
         {selected.size < photos.length && (
           <button className={cx(action, "hidden sm:inline-flex")} onClick={onSelectAll}>
             <CheckSquare className="size-4" /> Select all
@@ -46,7 +47,7 @@ export function SelectionBar({
           <Download className="size-4" /> <span className="hidden sm:inline">Download</span>
         </button>
         {canDelete && (
-          <button className={cx(action, "text-[#ff8a75]")} onClick={() => confirmDelete(ids, onClear)} disabled={remove.isPending}>
+          <button className={cx(action, "text-crit-soft")} onClick={() => confirmDelete(ids, onClear)} disabled={remove.isPending}>
             <Trash2 className="size-4" /> <span className="hidden sm:inline">Delete</span>
           </button>
         )}

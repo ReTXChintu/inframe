@@ -48,96 +48,139 @@ class _ShareSheetState extends State<_ShareSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     final event = widget.event;
     final code = event.joinCode;
     final link = code == null ? null : '${api.baseUrl}/join/$code';
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, 24 + MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 24 + MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('Invite people', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 16),
-          if (code != null && link != null) ...[
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const DsIconTile(Icons.person_add_alt),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Invite people', style: Theme.of(context).textTheme.titleLarge)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (code != null && link != null) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(Ds.rLg),
+                      border: Border.all(color: p.ln),
+                    ),
+                    child: QrImageView(data: link, size: 132, backgroundColor: Colors.white),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Join code', style: Theme.of(context).textTheme.labelMedium),
+                        const SizedBox(height: 4),
+                        SelectableText(
+                          prettyCode(code),
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontFamily: Ds.mono, fontWeight: FontWeight.w500, letterSpacing: 2),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            FilledButton.icon(
+                              icon: const Icon(Icons.share, size: 18),
+                              label: const Text('Share'),
+                              onPressed: () => SharePlus.instance.share(
+                                ShareParams(
+                                  subject: 'Join ${event.name} on InFrame',
+                                  text: 'Join "${event.name}" on InFrame — add your photos and find the ones you\'re in.\n$link\nCode: ${prettyCode(code)}',
+                                ),
+                              ),
+                            ),
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.copy, size: 18),
+                              label: const Text('Copy link'),
+                              onPressed: () async {
+                                await Clipboard.setData(ClipboardData(text: link));
+                                if (context.mounted) toast(context, 'Link copied.');
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ] else
               Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: p.line)),
-                child: QrImageView(data: link, size: 132, backgroundColor: Colors.white),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('JOIN CODE', style: TextStyle(color: p.muted, fontSize: 11, letterSpacing: 1.4, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  Text(prettyCode(code), style: Theme.of(context).textTheme.headlineSmall?.copyWith(letterSpacing: 2)),
-                  const SizedBox(height: 12),
-                  Wrap(spacing: 8, runSpacing: 8, children: [
-                    FilledButton.icon(
-                      icon: const Icon(Icons.share, size: 18),
-                      label: const Text('Share'),
-                      onPressed: () => SharePlus.instance.share(ShareParams(
-                        subject: 'Join ${event.name} on InFrame',
-                        text: 'Join "${event.name}" on InFrame — add your photos and find the ones you\'re in.\n$link\nCode: ${prettyCode(code)}',
-                      )),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(color: p.sunk, borderRadius: BorderRadius.circular(Ds.rLg)),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline, size: 18, color: p.tx2),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        event.isHost
+                            ? 'Joining with a code is off. Turn it on in event settings, or invite people by email below.'
+                            : 'Joining with a code is off for this event. Ask a host to invite people.',
+                        style: Theme.of(context).textTheme.bodySmall!.copyWith(color: p.tx2),
+                      ),
                     ),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.copy, size: 18),
-                      label: const Text('Copy link'),
-                      onPressed: () async {
-                        await Clipboard.setData(ClipboardData(text: link));
-                        if (context.mounted) toast(context, 'Link copied.');
-                      },
-                    ),
-                  ]),
-                ]),
-              ),
-            ]),
-          ] else
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: p.surface2, borderRadius: BorderRadius.circular(14)),
-              child: Text(
-                event.isHost ? 'Joining with a code is off. Turn it on in event settings, or invite people by email below.' : 'Joining with a code is off for this event. Ask a host to invite people.',
-                style: TextStyle(color: p.muted),
-              ),
-            ),
-          if (event.isHost) ...[
-            const Divider(height: 36),
-            Text('Invite by email', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text('They get a link to join. If they\'re new, they create an account first.', style: TextStyle(color: p.muted, fontSize: 13)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _emails,
-              minLines: 2,
-              maxLines: 4,
-              keyboardType: TextInputType.emailAddress,
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(hintText: 'priya@example.com, rahul@example.com'),
-            ),
-            const SizedBox(height: 12),
-            Row(children: [
-              if (event.isOwner)
-                DropdownButton<String>(
-                  value: _role,
-                  underline: const SizedBox.shrink(),
-                  items: const [
-                    DropdownMenuItem(value: 'member', child: Text('as Guest')),
-                    DropdownMenuItem(value: 'cohost', child: Text('as Co-host')),
                   ],
-                  onChanged: (v) => setState(() => _role = v ?? 'member'),
                 ),
-              const Spacer(),
+              ),
+            if (event.isHost) ...[
+              const Divider(height: 40),
+              Text('Invite by email', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 2),
+              Text(
+                'They get a link to join. If they\'re new, they create an account first.',
+                style: Theme.of(context).textTheme.bodySmall!.copyWith(color: p.tx3),
+              ),
+              const SizedBox(height: 12),
+              DsTextField(
+                controller: _emails,
+                label: 'Email addresses',
+                minLines: 2,
+                maxLines: 4,
+                autocorrect: false,
+                keyboardType: TextInputType.emailAddress,
+                onChanged: (_) => setState(() {}),
+                hint: 'priya@example.com, rahul@example.com',
+              ),
+              if (event.isOwner) ...[
+                const SizedBox(height: 16),
+                DsLabel(
+                  'Invite as',
+                  child: DsSegmented<String>(
+                    label: 'Invite as',
+                    value: _role,
+                    options: const [('member', 'Guest', null), ('cohost', 'Co-host', null)],
+                    onChanged: (v) => setState(() => _role = v),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
               BusyButton(
                 label: _parsed.length > 1 ? 'Send ${_parsed.length} invites' : 'Send invite',
                 icon: Icons.send,
                 busy: _busy,
                 onPressed: _parsed.isEmpty ? null : _invite,
               ),
-            ]),
+            ],
           ],
-        ]),
+        ),
       ),
     );
   }

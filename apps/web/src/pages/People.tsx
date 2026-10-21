@@ -7,7 +7,7 @@ import { plural } from "@/lib/format";
 import type { Person } from "@/lib/types";
 import { errorMessage, useFeedback } from "@/components/feedback";
 import { SelfieModal } from "@/components/SelfieCapture";
-import { Avatar, Badge, Button, Card, IconButton, LinkButton, Modal, Spinner, TextField } from "@/components/ui";
+import { Avatar, Button, Card, IconButton, IconTile, LinkButton, Modal, Spinner, TextField } from "@/components/ui";
 
 /** You + family members, each with the selfie InFrame searches for. */
 export function PeoplePage() {
@@ -36,15 +36,15 @@ export function PeoplePage() {
     onError: (err) => toast(errorMessage(err), "error"),
   });
 
-  if (isLoading || !data) return <Spinner />;
+  if (isLoading || !data) return <div className="flex justify-center py-24"><Spinner /></div>;
   const self = data.find((p) => p.kind === "self");
   const family = data.filter((p) => p.kind === "family");
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-3xl font-semibold sm:text-4xl">{welcome ? "Welcome to InFrame" : "People"}</h1>
-        <p className="mt-1.5 text-[15px] text-muted">
+        <h1 className="text-title-page">{welcome ? "Welcome to InFrame" : "People"}</h1>
+        <p className="mt-1 text-body-l text-tx2">
           {welcome
             ? "One last step: add a selfie so we can find the photos you're in. You can skip it and do it later."
             : "InFrame finds these faces in every event you're part of. Selfies are only used for matching and never shown to other guests."}
@@ -52,18 +52,18 @@ export function PeoplePage() {
       </div>
 
       {self && (
-        <Card className="frame p-5 sm:p-6 [--frame-inset:10px] [--frame-color:var(--line)]">
+        <Card className="p-5 sm:p-6">
           <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
-            <Avatar name={self.name} src={self.selfieUrl} size={96} />
+            <Avatar name={self.name} src={self.selfieUrl} size={80} />
             <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-semibold tracking-[0.14em] text-accent uppercase">You</p>
-              <h2 className="text-2xl font-semibold">{self.name}</h2>
-              <p className="mt-1 text-[14px] text-muted">
+              <p className="text-label text-tx2">You</p>
+              <h2 className="text-title-l">{self.name}</h2>
+              <p className="num mt-1 text-body text-tx2">
                 {self.hasSelfie ? `Found in ${plural(self.matchCount, "photo")} so far.` : "No selfie yet — we can't find your photos without one."}
               </p>
             </div>
             <div className="flex flex-wrap justify-center gap-2">
-              <Button icon={<Camera className="size-4" />} onClick={() => setSelfieFor(self)}>
+              <Button icon={<Camera className="size-[18px]" />} onClick={() => setSelfieFor(self)}>
                 {self.hasSelfie ? "Retake selfie" : "Take a selfie"}
               </Button>
               {self.hasSelfie && (
@@ -83,10 +83,10 @@ export function PeoplePage() {
 
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold">Family</h2>
-          <p className="text-[14px] text-muted">Kids, parents, partner — find their photos too, even if they don't have an account.</p>
+          <h2 className="text-title-section">Family</h2>
+          <p className="mt-0.5 text-body text-tx2">Kids, parents, partner — find their photos too, even if they don't have an account.</p>
         </div>
-        <Button variant="secondary" icon={<Plus className="size-4" />} onClick={() => setEditing("new")}>
+        <Button variant="secondary" icon={<Plus className="size-[18px]" />} onClick={() => setEditing("new")}>
           Add
         </Button>
       </div>
@@ -94,24 +94,24 @@ export function PeoplePage() {
       {family.length === 0 ? (
         <button
           onClick={() => setEditing("new")}
-          className="flex items-center justify-center gap-3 rounded-[18px] border-2 border-dashed border-line px-6 py-10 text-[15px] font-medium text-muted hover:bg-surface-2 hover:text-ink"
+          className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-ln2 px-6 py-10 text-body text-tx2 transition-colors hover:bg-sf2"
         >
-          <ScanFace className="size-6" /> Add a family member
+          <IconTile tone="muted"><ScanFace /></IconTile><span className="text-[13px] font-semibold text-ac">Add a family member</span>
         </button>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-3">
           {family.map((p) => (
             <li key={p.id}>
-              <Card className="flex items-center gap-4 p-4">
-                <Avatar name={p.name} src={p.selfieUrl} size={56} />
+              <Card className="flex items-center gap-3 p-4">
+                <Avatar name={p.name} src={p.selfieUrl} size={48} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold">{p.name}</p>
-                  <p className="truncate text-[13px] text-muted">
+                  <p className="truncate text-title-card">{p.name}</p>
+                  <p className="num truncate text-body-s text-tx3">
                     {p.relation ? `${p.relation} · ` : ""}
                     {p.hasSelfie ? plural(p.matchCount, "photo") : "No photo yet"}
                   </p>
                   {!p.hasSelfie && (
-                    <button onClick={() => setSelfieFor(p)} className="mt-1 text-[13px] font-semibold text-accent hover:underline">
+                    <button onClick={() => setSelfieFor(p)} className="mt-1 text-[13px] font-semibold text-ac hover:underline">
                       Add their photo
                     </button>
                   )}
@@ -195,7 +195,7 @@ function PersonEditor({ person, onClose, onCreated }: { person: Person | "new" |
       title={isNew ? "Add family member" : "Edit"}
       size="sm"
       footer={
-        <Button onClick={() => save.mutate()} disabled={!name.trim()} loading={save.isPending}>
+        <Button size="lg" onClick={() => save.mutate()} disabled={!name.trim()} loading={save.isPending}>
           {isNew ? "Next: add their photo" : "Save"}
         </Button>
       }
@@ -209,7 +209,7 @@ function PersonEditor({ person, onClose, onCreated }: { person: Person | "new" |
       >
         <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus />
         <TextField label="Relation (optional)" placeholder="Daughter, Mum…" value={relation} onChange={(e) => setRelation(e.target.value)} maxLength={40} />
-        {!isNew && <Badge className="self-start">Changing the photo is done from the camera button.</Badge>}
+        {!isNew && <p className="text-caption text-tx3">Changing the photo is done from the camera button.</p>}
       </form>
     </Modal>
   );

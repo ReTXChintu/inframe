@@ -8,14 +8,14 @@ import { plural, PROVIDER_LABEL, timeAgo } from "@/lib/format";
 import { errorMessage, useFeedback } from "@/components/feedback";
 import { AndroidAppCard } from "@/components/AndroidApp";
 import { connectGoogle, GoogleNotSetUp, MegaConnectModal, ProviderMark, useConnections } from "@/components/StoragePicker";
-import { Button, Card, Modal, Segmented, Spinner, TextField } from "@/components/ui";
+import { Button, Card, IconTile, Modal, Segmented, Spinner, TextField } from "@/components/ui";
 
 function Section({ id, title, description, children }: { id?: string; title: string; description?: string; children: ReactNode }) {
   return (
-    <Card className="scroll-mt-24 p-5 sm:p-6">
+    <Card className="scroll-mt-24 p-5">
       <section id={id}>
-        <h2 className="text-lg font-semibold">{title}</h2>
-        {description && <p className="mt-1 text-[14px] text-muted">{description}</p>}
+        <h2 className="text-title-section">{title}</h2>
+        {description && <p className="mt-1 text-body text-tx2">{description}</p>}
         <div className="mt-4">{children}</div>
       </section>
     </Card>
@@ -46,18 +46,18 @@ export function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="text-3xl font-semibold sm:text-4xl">Settings</h1>
+      <h1 className="text-title-page">Settings</h1>
       {me?.user.isAdmin && (
         <Link
           to="/admin"
-          className="flex items-center gap-3 rounded-[18px] border border-accent/30 bg-accent-soft p-4 transition-colors hover:brightness-[0.98]"
+          className="flex min-h-16 items-center gap-3 rounded-xl border border-ln bg-sf p-4 transition-colors duration-[120ms] hover:bg-sf2"
         >
-          <ShieldCheck className="size-6 shrink-0 text-accent" />
+          <IconTile tone="accent"><ShieldCheck /></IconTile>
           <span className="min-w-0 flex-1">
-            <span className="block font-semibold">Admin settings</span>
-            <span className="block text-[13px] text-ink-2">Face model, Google Drive and email for the whole server.</span>
+            <span className="block text-title-card">Admin settings</span>
+            <span className="mt-0.5 block text-body-s text-tx3">Face model, Google Drive and email for the whole server.</span>
           </span>
-          <ChevronRight className="size-5 text-ink-2" />
+          <ChevronRight className="size-[18px] text-tx2" />
         </Link>
       )}
       <AndroidAppCard />
@@ -94,7 +94,7 @@ function ProfileSection() {
   return (
     <Section title="Profile">
       <form
-        className="flex flex-col gap-4 sm:flex-row sm:items-end"
+        className="flex flex-col gap-4 sm:flex-row sm:items-start"
         onSubmit={(e) => {
           e.preventDefault();
           save.mutate();
@@ -102,7 +102,7 @@ function ProfileSection() {
       >
         <TextField className="flex-1" label="Name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
         <TextField className="flex-1" label="Email" value={me?.user.email ?? ""} readOnly disabled hint="Your sign-in email." />
-        <Button type="submit" disabled={!name.trim() || name === me?.user.name} loading={save.isPending} className="sm:mb-6">
+        <Button type="submit" disabled={!name.trim() || name === me?.user.name} loading={save.isPending} size="lg" className="sm:mt-6">
           Save
         </Button>
       </form>
@@ -131,15 +131,15 @@ function StorageSection() {
       ) : (
         <div className="flex flex-col gap-3">
           {(data?.connections ?? []).map((c) => (
-            <div key={c.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-line p-4">
+            <div key={c.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-ln bg-sf2 p-3.5">
               <ProviderMark provider={c.provider} className="size-7" />
               <div className="min-w-0 flex-1">
-                <p className="font-medium">{PROVIDER_LABEL[c.provider]}</p>
-                <p className="truncate text-[13px] text-muted">
+                <p className="text-title-card">{PROVIDER_LABEL[c.provider]}</p>
+                <p className="num truncate text-body-s text-tx3">
                   {c.accountLabel} · {plural(c.eventCount, "event")} · added {timeAgo(c.createdAt)}
                 </p>
                 {c.status === "error" && (
-                  <p className="mt-1 inline-flex items-center gap-1.5 text-[13px] text-warn">
+                  <p className="mt-1 inline-flex items-center gap-1.5 text-body-s font-medium text-warn">
                     <AlertTriangle className="size-4" /> {c.lastError ?? "Needs reconnecting."}
                   </p>
                 )}
@@ -156,8 +156,7 @@ function StorageSection() {
                 ))}
               <Button
                 size="sm"
-                variant="ghost"
-                className="text-danger"
+                variant="danger"
                 onClick={async () => {
                   const ok = await confirm({
                     title: `Disconnect ${PROVIDER_LABEL[c.provider]}?`,
@@ -215,6 +214,7 @@ function AppearanceSection() {
   return (
     <Section title="Appearance">
       <Segmented
+        className="w-full sm:w-60"
         label="Theme"
         value={theme}
         onChange={(t) => {
@@ -256,7 +256,7 @@ function AccountSection() {
         <Button variant="secondary" icon={<LogOut className="size-4" />} onClick={() => signOut().then(() => navigate("/login"))}>
           Sign out
         </Button>
-        <Button variant="ghost" className="text-danger" icon={<Trash2 className="size-4" />} onClick={() => setOpen(true)}>
+        <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={() => setOpen(true)}>
           Delete account
         </Button>
       </div>
@@ -266,13 +266,13 @@ function AccountSection() {
         title="Delete your account?"
         size="sm"
         footer={
-          <Button variant="danger" disabled={confirmText.trim() !== "DELETE"} loading={del.isPending} onClick={() => del.mutate()}>
+          <Button variant="dangerFill" size="lg" disabled={confirmText.trim() !== "DELETE"} loading={del.isPending} onClick={() => del.mutate()}>
             Delete forever
           </Button>
         }
       >
         <div className="flex flex-col gap-4">
-          <p className="text-[14px] text-muted">
+          <p className="text-body-l text-tx2">
             Your selfies, family members and storage connections are deleted, and events you own are removed for everyone. Photo
             files in your Drive/MEGA stay where they are. Your sign-in account itself stays, for SpendLog and Trippin.
           </p>

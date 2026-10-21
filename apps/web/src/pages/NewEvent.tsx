@@ -101,15 +101,15 @@ export function NewEventPage() {
   return (
     <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
       <div>
-        <h1 className="text-3xl font-semibold">New event</h1>
-        <p className="mt-1.5 text-[15px] text-muted">Everyone you invite can add photos. They're saved to your storage.</p>
+        <h1 className="text-title-page">New event</h1>
+        <p className="mt-1 text-body-l text-tx2">Everyone you invite can add photos. They're saved to your storage.</p>
       </div>
 
       {/* Wide screens: the event and its storage side by side. */}
-      <div className="grid items-start gap-6 lg:grid-cols-2">
-      <Card className="flex flex-col gap-5 p-5 sm:p-6">
-        <h2 className="text-lg font-semibold">
-          <span className="mr-2 text-muted">1</span>The event
+      <div className="grid items-start gap-5 lg:grid-cols-2">
+      <Card className="flex flex-col gap-5 p-5">
+        <h2 className="flex items-center gap-2.5 text-title-section">
+          <StepBadge n={1} />The event
         </h2>
         <TextField
           label="Name"
@@ -121,7 +121,7 @@ export function NewEventPage() {
           autoFocus
         />
         <div className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium text-ink-2" id="kind-label">
+          <span className="text-label text-tx2" id="kind-label">
             Kind
           </span>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-labelledby="kind-label">
@@ -133,11 +133,11 @@ export function NewEventPage() {
                 aria-checked={draft.kind === k.value}
                 onClick={() => set("kind", k.value)}
                 className={cx(
-                  "flex h-12 items-center justify-center gap-2 rounded-xl border text-[14px] font-medium transition-colors",
-                  draft.kind === k.value ? "border-ink bg-ink text-bg" : "border-line hover:bg-surface-2",
+                  "flex h-12 items-center justify-center gap-2 rounded-md border text-[14px] font-medium transition-colors duration-[120ms]",
+                  draft.kind === k.value ? "border-tx bg-tx text-bg" : "border-ln2 bg-sf text-tx hover:bg-sf2",
                 )}
               >
-                <k.icon className="size-4" /> {k.label}
+                <k.icon className="size-[18px]" /> {k.label}
               </button>
             ))}
           </div>
@@ -155,12 +155,12 @@ export function NewEventPage() {
         </div>
       </Card>
 
-      <Card className="flex flex-col gap-5 p-5 sm:p-6">
+      <Card className="flex flex-col gap-5 p-5">
         <div>
-          <h2 className="text-lg font-semibold">
-            <span className="mr-2 text-muted">2</span>Where photos are stored
+          <h2 className="flex items-center gap-2.5 text-title-section">
+            <StepBadge n={2} />Where photos are stored
           </h2>
-          <p className="mt-1 text-[14px] text-muted">
+          <p className="mt-1 text-body text-tx2">
             Photos go into your Google Drive or MEGA folder, with their thumbnails in a hidden “.inframe” sub-folder. InFrame
             keeps no copies of its own.
           </p>
@@ -175,7 +175,7 @@ export function NewEventPage() {
       </div>
 
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={() => navigate(-1)}>
+        <Button variant="ghost" size="lg" onClick={() => navigate(-1)}>
           Cancel
         </Button>
         <Button type="submit" size="lg" disabled={!canSubmit} loading={create.isPending}>
@@ -184,4 +184,9 @@ export function NewEventPage() {
       </div>
     </form>
   );
+}
+
+/** §7.8 step marker: a small accent badge with the step number. */
+function StepBadge({ n }: { n: number }) {
+  return <span className="num inline-flex size-6 items-center justify-center rounded-sm bg-ac-soft text-xs font-semibold text-ac">{n}</span>;
 }

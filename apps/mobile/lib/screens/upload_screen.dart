@@ -1,5 +1,6 @@
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 
@@ -101,14 +102,14 @@ class _UploadScreenState extends State<UploadScreen> {
 
   /// true = skip duplicates, false = upload anyway, null = cancel.
   Future<bool?> _askAboutDuplicates(List<PickedMedia> repeated, int total) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     return showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (context) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -117,7 +118,7 @@ class _UploadScreenState extends State<UploadScreen> {
               const SizedBox(height: 6),
               Text(
                 '${repeated.length == total ? 'All of them have' : '${repeated.length} of $total have'} the same name, size and date as files already in this event (or already uploading).',
-                style: TextStyle(color: p.muted),
+                style: Theme.of(context).textTheme.bodyLarge!.copyWith(color: p.tx2),
               ),
               const SizedBox(height: 12),
               ConstrainedBox(
@@ -130,10 +131,20 @@ class _UploadScreenState extends State<UploadScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
                           children: [
-                            Icon(f.isVideo ? Icons.movie_outlined : Icons.photo_outlined, size: 18, color: p.muted),
+                            Icon(f.isVideo ? Icons.movie_outlined : Icons.photo_outlined, size: 18, color: p.tx3),
                             const SizedBox(width: 8),
-                            Expanded(child: Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                            Text(formatBytes(f.size), style: TextStyle(color: p.muted, fontSize: 12)),
+                            Expanded(
+                              child: Text(
+                                f.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontFamily: Ds.mono, fontSize: 13),
+                              ),
+                            ),
+                            Text(
+                              formatBytes(f.size),
+                              style: TextStyle(color: p.tx3, fontSize: 12, fontFeatures: Ds.tabular),
+                            ),
                           ],
                         ),
                       ),
@@ -177,7 +188,7 @@ class _UploadScreenState extends State<UploadScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     final event = widget.event;
     return ListenableBuilder(
       listenable: uploads,
@@ -193,15 +204,11 @@ class _UploadScreenState extends State<UploadScreen> {
         return Scaffold(
           appBar: AppBar(
             title: const Text('Add photos & videos'),
-            actions: [
-              if (done + failed > 0) TextButton(onPressed: () => uploads.clearFinished(event.id), child: const Text('Clear finished')),
-            ],
+            actions: [if (done + failed > 0) TextButton(onPressed: () => uploads.clearFinished(event.id), child: const Text('Clear finished'))],
           ),
           floatingActionButton: _preparing
               ? null
               : FloatingActionButton.extended(
-                  backgroundColor: p.ink,
-                  foregroundColor: p.bg,
                   icon: const Icon(Icons.add_photo_alternate_outlined),
                   label: Text(items.isEmpty ? 'Choose from gallery' : 'Add more'),
                   onPressed: _pick,
@@ -209,41 +216,46 @@ class _UploadScreenState extends State<UploadScreen> {
           body: CustomScrollView(
             slivers: [
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                padding: EdgeInsets.fromLTRB(Ds.pagePad(context), 4, Ds.pagePad(context), 0),
                 sliver: SliverList.list(
                   children: [
                     Text(
                       'Originals are saved to ${event.storageFolderName != null ? '“${event.storageFolderName}”' : 'the event\'s storage'}. '
                       'Photos are scanned for faces; videos are stored as they are. Uploads keep going if you leave the app.',
-                      style: TextStyle(color: p.muted),
+                      style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: p.tx3),
                     ),
                     if (event.canViewAll && event.folders.isNotEmpty) ...[
-                      const SizedBox(height: 14),
-                      DropdownButtonFormField<String?>(
-                        initialValue: _folderId,
-                        decoration: const InputDecoration(labelText: 'Add to album'),
-                        items: [
-                          const DropdownMenuItem<String?>(value: null, child: Text('No album')),
-                          for (final f in event.folders) DropdownMenuItem<String?>(value: f.id, child: Text(f.name)),
-                        ],
-                        onChanged: (v) => setState(() => _folderId = v),
+                      const SizedBox(height: 16),
+                      DsLabel(
+                        'Add to album',
+                        child: DropdownButtonFormField<String?>(
+                          initialValue: _folderId,
+                          borderRadius: BorderRadius.circular(Ds.rLg),
+                          dropdownColor: p.sf,
+                          icon: Icon(Icons.expand_more, size: 20, color: p.tx2),
+                          items: [
+                            const DropdownMenuItem<String?>(value: null, child: Text('No album')),
+                            for (final f in event.folders) DropdownMenuItem<String?>(value: f.id, child: Text(f.name)),
+                          ],
+                          onChanged: (v) => setState(() => _folderId = v),
+                        ),
                       ),
                     ],
                     const SizedBox(height: 16),
                     if (_preparing)
+                      // Processing card (§7.11): a title, a counter, a 6 px bar.
                       Card(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(_prepared < _preparingTotal ? 'Reading $_prepared of $_preparingTotal…' : 'Checking for duplicates…'),
-                              const SizedBox(height: 10),
-                              LinearProgressIndicator(
-                                value: _preparingTotal == 0 ? null : _prepared / _preparingTotal,
-                                color: p.ink,
-                                backgroundColor: p.surface2,
+                              Text(
+                                _prepared < _preparingTotal ? 'Reading $_prepared of $_preparingTotal…' : 'Checking for duplicates…',
+                                style: Theme.of(context).textTheme.titleSmall!.copyWith(fontFeatures: Ds.tabular),
                               ),
+                              const SizedBox(height: 12),
+                              LinearProgressIndicator(value: _preparingTotal == 0 ? null : _prepared / _preparingTotal),
                             ],
                           ),
                         ),
@@ -253,25 +265,20 @@ class _UploadScreenState extends State<UploadScreen> {
                         icon: Icons.add_photo_alternate_outlined,
                         title: 'Choose photos and videos',
                         body: 'Pick as many as you like — whole albums at once.',
-                        action: FilledButton.icon(
-                          onPressed: _pick,
-                          icon: const Icon(Icons.photo_library_outlined),
-                          label: const Text('Open gallery'),
-                        ),
+                        action: FilledButton.icon(onPressed: _pick, icon: const Icon(Icons.photo_library_outlined), label: const Text('Open gallery')),
                       )
                     else if (items.isNotEmpty) ...[
                       Wrap(
-                        spacing: 16,
-                        runSpacing: 6,
+                        spacing: 20,
+                        runSpacing: 8,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           _Stat(value: items.length, label: 'selected'),
                           _Stat(value: sent, label: 'uploaded'),
                           _Stat(value: done, label: 'finished'),
-                          _Stat(value: matched, label: 'with you or family', color: p.accent),
-                          if (failed > 0) _Stat(value: failed, label: 'failed', color: p.danger),
-                          if (waiting > 0)
-                            TextButton(onPressed: () => uploads.cancelWaiting(event.id), child: Text('Cancel $waiting waiting')),
+                          _Stat(value: matched, label: 'with you or family', color: p.ac),
+                          if (failed > 0) _Stat(value: failed, label: 'failed', color: p.crit),
+                          if (waiting > 0) TextButton(onPressed: () => uploads.cancelWaiting(event.id), child: Text('Cancel $waiting waiting')),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -281,7 +288,7 @@ class _UploadScreenState extends State<UploadScreen> {
               ),
               // Lazily built: a batch can be thousands of files.
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                padding: EdgeInsets.fromLTRB(Ds.pagePad(context), 0, Ds.pagePad(context), 96),
                 sliver: SliverList.separated(
                   itemCount: items.length,
                   separatorBuilder: (_, _) => const Divider(),
@@ -304,17 +311,18 @@ class _Stat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    // Inline KPI (§7.10): a 17/600 tabular value with its words after it.
+    final p = DsColors.of(context);
     return Text.rich(
       TextSpan(
         children: [
           TextSpan(
-            text: '$value ',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(color: color ?? p.ink),
+            text: '${NumberFormat.decimalPattern().format(value)} ',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(color: color ?? p.tx, fontFeatures: Ds.tabular),
           ),
           TextSpan(
             text: label,
-            style: TextStyle(color: color ?? p.muted),
+            style: TextStyle(fontSize: 13, color: color ?? p.tx3),
           ),
         ],
       ),
@@ -329,23 +337,23 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     final e = entry;
     final status = switch (e.stage) {
-      UploadStage.queued => const Pill('Waiting'),
-      UploadStage.uploading => Pill('Uploading ${(e.progress * 100).round()}%'),
-      UploadStage.received => const Pill('Queued on server'),
-      UploadStage.storing => const Pill('Saving to storage…'),
-      UploadStage.processing => const Pill('Making previews…'),
-      UploadStage.findingFaces => const Pill('Finding faces…', tone: PillTone.warn, icon: Icons.face),
-      UploadStage.done when e.isVideo => const Pill('Stored', tone: PillTone.ok, icon: Icons.check_circle),
-      UploadStage.done when e.error != null => Pill(e.error!, tone: PillTone.warn),
-      UploadStage.done when e.matches > 0 => const Pill('Matched', tone: PillTone.accent, icon: Icons.check_circle),
-      UploadStage.done => Pill(e.faces != null && e.faces! > 0 ? plural(e.faces!, 'face') : 'No faces', tone: PillTone.ok),
-      UploadStage.failed => const Pill('Failed', tone: PillTone.danger, icon: Icons.error_outline),
+      UploadStage.queued => const DsBadge('Waiting'),
+      UploadStage.uploading => DsBadge('Uploading ${(e.progress * 100).round()}%'),
+      UploadStage.received => const DsBadge('Queued on server'),
+      UploadStage.storing => const DsBadge('Saving to storage…'),
+      UploadStage.processing => const DsBadge('Making previews…'),
+      UploadStage.findingFaces => const DsBadge('Finding faces…', tone: DsTone.warn, icon: Icons.face),
+      UploadStage.done when e.isVideo => const DsBadge('Stored', tone: DsTone.good, icon: Icons.check_circle),
+      UploadStage.done when e.error != null => DsBadge(e.error!, tone: DsTone.warn),
+      UploadStage.done when e.matches > 0 => const DsBadge('Matched', tone: DsTone.accent, icon: Icons.check_circle),
+      UploadStage.done => DsBadge(e.faces != null && e.faces! > 0 ? plural(e.faces!, 'face') : 'No faces', tone: DsTone.good),
+      UploadStage.failed => const DsBadge('Failed', tone: DsTone.crit, icon: Icons.error_outline),
     };
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
           _Thumb(entry: e),
@@ -354,29 +362,21 @@ class _Row extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // File names are machine strings: Plex Mono (§4.1).
                 Text(
                   e.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
+                  style: const TextStyle(fontFamily: Ds.mono, fontSize: 13, height: 18 / 13),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   e.stage == UploadStage.failed ? (e.error ?? 'Failed') : formatBytes(e.size),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: e.stage == UploadStage.failed ? p.danger : p.muted),
+                  style: TextStyle(fontSize: 12, height: 16 / 12, color: e.stage == UploadStage.failed ? p.crit : p.tx3, fontFeatures: Ds.tabular),
                 ),
-                if (e.stage == UploadStage.uploading) ...[
-                  const SizedBox(height: 6),
-                  LinearProgressIndicator(
-                    value: e.progress,
-                    minHeight: 3,
-                    borderRadius: BorderRadius.circular(2),
-                    color: p.ink,
-                    backgroundColor: p.surface2,
-                  ),
-                ],
+                if (e.stage == UploadStage.uploading) ...[const SizedBox(height: 6), LinearProgressIndicator(value: e.progress)],
               ],
             ),
           ),
@@ -404,13 +404,13 @@ class _ThumbState extends State<_Thumb> {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     final placeholder = ColoredBox(
-      color: p.surface2,
-      child: Icon(widget.entry.isVideo ? Icons.movie_outlined : Icons.photo_outlined, size: 20, color: p.muted),
+      color: p.sunk,
+      child: Icon(widget.entry.isVideo ? Icons.movie_outlined : Icons.photo_outlined, size: 20, color: p.tx3),
     );
     return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(Ds.rMd),
       child: SizedBox(
         width: 48,
         height: 48,

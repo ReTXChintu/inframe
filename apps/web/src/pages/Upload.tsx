@@ -4,7 +4,7 @@ import { ArrowLeft, CheckCircle2, CircleAlert, Film, ImagePlus, RotateCcw, ScanF
 import { formatBytes, plural, PROVIDER_LABEL } from "@/lib/format";
 import { addFiles, cancelQueued, clearFinished, fileKey, findDuplicates, isVideoFile, retry, useUploads, type UploadItem } from "@/lib/uploads";
 import { errorMessage, useFeedback } from "@/components/feedback";
-import { Badge, Button, Card, cx, EmptyState, LinkButton, Modal, SelectField } from "@/components/ui";
+import { Badge, Button, Card, cx, EmptyState, IconTile, LinkButton, Modal, SelectField } from "@/components/ui";
 import { useEvent } from "./Event";
 import { LoadingBlock } from "./Events";
 
@@ -80,14 +80,14 @@ export function UploadPage() {
   const queued = count((x) => x.stage === "queued");
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <Link to={`/events/${event.id}`} className="inline-flex items-center gap-1.5 text-[14px] text-muted hover:text-ink">
+          <Link to={`/events/${event.id}`} className="inline-flex items-center gap-1.5 rounded-md text-body font-medium text-tx2 hover:text-tx">
             <ArrowLeft className="size-4" /> {event.name}
           </Link>
-          <h1 className="mt-2 text-3xl font-semibold">Add photos & videos</h1>
-          <p className="mt-1.5 text-[15px] text-muted">
+          <h1 className="mt-2 text-title-page">Add photos & videos</h1>
+          <p className="mt-1 text-body-l text-tx2">
             Originals are saved to {event.storage.folderName ? `“${event.storage.folderName}” in ` : ""}
             {event.storage.provider ? PROVIDER_LABEL[event.storage.provider] : "storage"}. Photos are scanned for faces; videos are
             stored as they are. Once a file shows “Queued on server”, you can close this tab.
@@ -101,8 +101,8 @@ export function UploadPage() {
       </div>
 
       {/* Wide screens: drop zone pinned on the left, the per-file list fills the right. */}
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(300px,2fr)_3fr]">
-      <div className="flex flex-col gap-4 lg:sticky lg:top-24">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(300px,2fr)_3fr]">
+      <div className="flex flex-col gap-4 lg:sticky lg:top-6">
       <label
         onDragOver={(e) => {
           e.preventDefault();
@@ -111,13 +111,13 @@ export function UploadPage() {
         onDragLeave={() => setDrag(false)}
         onDrop={onDrop}
         className={cx(
-          "frame flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[22px] border-2 border-dashed px-6 py-12 text-center transition-colors lg:min-h-[340px] [--frame-inset:-2px] [--frame-len:26px]",
-          drag ? "border-accent bg-accent-soft text-accent" : "border-line bg-surface hover:bg-surface-2",
+          "flex cursor-pointer flex-col has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-3 has-[:focus-visible]:outline-ac items-center justify-center gap-3 rounded-2xl border-[1.5px] border-dashed px-6 py-12 text-center transition-colors duration-[120ms] lg:min-h-[340px]",
+          drag ? "border-ac bg-ac-soft" : "border-ln2 bg-sf hover:bg-sf2",
         )}
       >
-        <ImagePlus className="size-10" strokeWidth={1.5} />
-        <span className="text-lg font-semibold">{checking ? "Checking for duplicates…" : "Drop photos and videos here, or tap to choose"}</span>
-        <span className="text-[14px] text-muted">JPG, PNG, HEIC, MP4, MOV and more · as many as you like</span>
+        <IconTile tone="accent" size={48}><ImagePlus /></IconTile>
+        <span className="text-title-card">{checking ? "Checking for duplicates…" : "Drop photos and videos here, or tap to choose"}</span>
+        <span className="text-body-s text-tx3">JPG, PNG, HEIC, MP4, MOV and more · as many as you like</span>
         <input
           ref={input}
           type="file"
@@ -144,12 +144,12 @@ export function UploadPage() {
       </div>
 
       {items.length === 0 ? (
-        <div className="hidden h-full min-h-[340px] items-center justify-center rounded-[22px] border border-line bg-surface p-8 text-center text-[15px] text-muted lg:flex">
+        <div className="hidden h-full min-h-[340px] items-center justify-center rounded-xl border border-dashed border-ln2 p-8 text-center text-body text-tx2 lg:flex">
           Each file shows up here with its progress — uploading, saving to storage, finding faces.
         </div>
       ) : (
         <Card>
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line px-5 py-4 text-[14px]">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-ln px-5 py-4 text-body-s">
             <Stat label="selected" value={items.length} />
             <Stat label="uploaded" value={uploaded} />
             <Stat label="finished" value={done} />
@@ -168,7 +168,7 @@ export function UploadPage() {
               )}
             </div>
           </div>
-          <ul className="divide-y divide-line">
+          <ul className="divide-y divide-ln">
             {items.map((item) => (
               <UploadRow key={item.key} item={item} />
             ))}
@@ -183,25 +183,25 @@ export function UploadPage() {
         title={`${plural(dupeList.length, "file")} already here`}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setDupes(null)}>
+            <Button variant="ghost" size="lg" onClick={() => setDupes(null)}>
               Cancel
             </Button>
-            <Button variant="secondary" onClick={() => settleDupes(false)}>
+            <Button variant="secondary" size="lg" onClick={() => settleDupes(false)}>
               Upload anyway
             </Button>
-            <Button onClick={() => settleDupes(true)}>Skip duplicates</Button>
+            <Button size="lg" onClick={() => settleDupes(true)}>Skip duplicates</Button>
           </>
         }
       >
-        <p className="text-[15px] text-muted">
+        <p className="text-body-l text-tx2">
           {dupeList.length === dupes?.files.length ? "All of them have" : `${dupeList.length} of ${dupes?.files.length} have`} the same
           name, size and date as files already in this event (or already uploading).
         </p>
-        <ul className="mt-3 max-h-56 divide-y divide-line overflow-y-auto rounded-xl border border-line text-[14px]">
+        <ul className="mt-3 max-h-56 divide-y divide-ln overflow-y-auto rounded-lg border border-ln text-body-s">
           {dupeList.slice(0, 200).map((f) => (
-            <li key={fileKey(f)} className="flex justify-between gap-3 px-3 py-2">
-              <span className="min-w-0 truncate">{f.name}</span>
-              <span className="shrink-0 text-muted">{formatBytes(f.size)}</span>
+            <li key={fileKey(f)} className="flex justify-between gap-3 px-3 py-2.5">
+              <span className="min-w-0 truncate font-mono text-[13px]">{f.name}</span>
+              <span className="num shrink-0 text-tx3">{formatBytes(f.size)}</span>
             </li>
           ))}
         </ul>
@@ -212,8 +212,8 @@ export function UploadPage() {
 
 function Stat({ label, value, accent, danger }: { label: string; value: number; accent?: boolean; danger?: boolean }) {
   return (
-    <span className={cx(accent && "text-accent", danger && "text-danger")}>
-      <strong className="font-display text-xl tabular-nums">{value}</strong> <span className={cx(!accent && !danger && "text-muted")}>{label}</span>
+    <span className={cx("inline-flex items-baseline gap-1.5", accent && "text-ac", danger && "text-crit")}>
+      <strong className="num text-title-section">{value}</strong> <span className={cx(!accent && !danger && "text-tx2")}>{label}</span>
     </span>
   );
 }
@@ -248,16 +248,16 @@ function UploadRow({ item }: { item: UploadItem }) {
   })();
 
   return (
-    <li className="flex items-center gap-3 px-5 py-3">
-      <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-2 text-muted">
+    <li className="flex items-center gap-3 min-h-16 px-5 py-3">
+      <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-md bg-sunk text-tx3">
         {item.previewUrl ? <img src={item.previewUrl} alt="" className="size-full object-cover" /> : item.isVideo && <Film className="size-5" />}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[14px] font-medium">{item.file.name}</p>
-        <p className={cx("truncate text-[12px]", item.error ? "text-danger" : "text-muted")}>{item.error ?? formatBytes(item.file.size)}</p>
+        <p className="truncate font-mono text-[13px] font-medium">{item.file.name}</p>
+        <p className={cx("num truncate text-caption", item.error ? "text-crit" : "text-tx3")}>{item.error ?? formatBytes(item.file.size)}</p>
         {item.stage === "uploading" && (
-          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-2">
-            <div className="h-full rounded-full bg-ink transition-[width]" style={{ width: `${item.progress * 100}%` }} />
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-[3px] bg-sunk">
+            <div className="h-full rounded-[3px] bg-ac transition-[width]" style={{ width: `${item.progress * 100}%` }} />
           </div>
         )}
       </div>

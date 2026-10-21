@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'screens/auth_screens.dart';
@@ -10,6 +12,10 @@ import 'widgets/common.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // IBM Plex ships in the app under the SIL Open Font License; list it on the licences page.
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(const ['IBM Plex'], await rootBundle.loadString('assets/fonts/OFL.txt'));
+  });
   // Background uploads: reattach to anything still running from before the app was closed.
   uploads.init().catchError((Object e) => debugPrint('uploads: init failed: $e'));
   runApp(ChangeNotifierProvider(create: (_) => Session()..start(), child: const InFrameApp()));
@@ -25,6 +31,7 @@ class InFrameApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
       home: const _Gate(),
     );
   }
@@ -40,7 +47,10 @@ class _Gate extends StatelessWidget {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
       child: switch (status) {
-        SessionStatus.loading => const Scaffold(key: ValueKey('splash'), body: Center(child: Logo(size: 28))),
+        SessionStatus.loading => const Scaffold(
+          key: ValueKey('splash'),
+          body: Center(child: Logo(size: 24)),
+        ),
         SessionStatus.signedOut => const LoginScreen(key: ValueKey('login')),
         SessionStatus.signedIn => const HomeScreen(key: ValueKey('home')),
       },

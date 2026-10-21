@@ -168,7 +168,7 @@ class _GalleryPickerState extends State<GalleryPicker> with WidgetsBindingObserv
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     final state = _permission;
     final limited = state == PermissionState.limited;
 
@@ -177,8 +177,7 @@ class _GalleryPickerState extends State<GalleryPicker> with WidgetsBindingObserv
         title: Text(_selected.isEmpty ? 'Choose photos & videos' : '${_selected.length} selected'),
         actions: [
           if (_albumCount > 0) TextButton(onPressed: _selectAll, child: const Text('Select all')),
-          if (_selected.isNotEmpty)
-            IconButton(tooltip: 'Clear selection', icon: const Icon(Icons.deselect), onPressed: () => setState(_selected.clear)),
+          if (_selected.isNotEmpty) IconButton(tooltip: 'Clear selection', icon: const Icon(Icons.deselect), onPressed: () => setState(_selected.clear)),
         ],
       ),
       body: switch (state) {
@@ -192,45 +191,54 @@ class _GalleryPickerState extends State<GalleryPicker> with WidgetsBindingObserv
         _ => Column(
           children: [
             if (limited)
-              Material(
-                color: p.surface2,
-                child: ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.info_outline),
-                  title: const Text("You've shared only some photos with InFrame."),
-                  trailing: TextButton(onPressed: PhotoManager.presentLimited, child: const Text('Add more')),
+              // Neutral callout (§7.5) with a trailing action.
+              Padding(
+                padding: EdgeInsets.fromLTRB(Ds.pagePad(context), 4, Ds.pagePad(context), 4),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
+                  decoration: BoxDecoration(color: p.sunk, borderRadius: BorderRadius.circular(Ds.rLg)),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 18, color: p.tx2),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text("You've shared only some photos with InFrame.", style: Theme.of(context).textTheme.bodySmall!.copyWith(color: p.tx2)),
+                      ),
+                      TextButton(onPressed: PhotoManager.presentLimited, child: const Text('Add more')),
+                    ],
+                  ),
                 ),
               ),
             SizedBox(
               height: 52,
               child: ListView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: EdgeInsets.symmetric(horizontal: Ds.pagePad(context)),
                 children: [
                   for (final k in _Kind.values)
                     Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: ChoiceChip(
-                        label: Text(switch (k) {
+                      padding: const EdgeInsets.only(right: 8),
+                      child: DsChoiceChip(
+                        label: switch (k) {
                           _Kind.all => 'All',
                           _Kind.photos => 'Photos',
                           _Kind.videos => 'Videos',
-                        }),
+                        },
                         selected: _kind == k,
-                        onSelected: (_) {
+                        onSelected: () {
                           setState(() => _kind = k);
                           _loadAlbums(keepAlbum: true);
                         },
                       ),
                     ),
-                  const VerticalDivider(width: 16),
+                  VerticalDivider(width: 16, indent: 14, endIndent: 14, color: p.ln2),
                   for (final a in _albums)
                     Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: ChoiceChip(
-                        label: Text(a.isAll ? 'Recents' : a.name),
+                      padding: const EdgeInsets.only(right: 8),
+                      child: DsChoiceChip(
+                        label: a.isAll ? 'Recents' : a.name,
                         selected: _album?.id == a.id,
-                        onSelected: (_) {
+                        onSelected: () {
                           setState(() => _album = a);
                           _reload();
                         },
@@ -289,14 +297,20 @@ class _GalleryPickerState extends State<GalleryPicker> with WidgetsBindingObserv
       },
       bottomNavigationBar: _selected.isEmpty
           ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-                  icon: const Icon(Icons.cloud_upload_outlined),
-                  label: Text('Upload ${plural(_selected.length, 'file')}'),
-                  onPressed: () => Navigator.pop(context, _selected.values.toList()),
+          : DecoratedBox(
+              decoration: BoxDecoration(
+                color: p.sf,
+                border: Border(top: BorderSide(color: p.ln)),
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(Ds.pagePad(context), 12, Ds.pagePad(context), 12),
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                    icon: const Icon(Icons.cloud_upload_outlined),
+                    label: Text('Upload ${plural(_selected.length, 'file')}'),
+                    onPressed: () => Navigator.pop(context, _selected.values.toList()),
+                  ),
                 ),
               ),
             ),
@@ -312,7 +326,7 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = DsColors.of(context);
     final isVideo = asset.type == AssetType.video;
     return GestureDetector(
       onTap: onTap,
@@ -323,17 +337,17 @@ class _Tile extends StatelessWidget {
             duration: const Duration(milliseconds: 110),
             padding: EdgeInsets.all(selected ? 7 : 0),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(selected ? 8 : 0),
+              borderRadius: BorderRadius.circular(selected ? Ds.rMd : 0),
               child: AssetEntityImage(
                 asset,
                 isOriginal: false,
                 thumbnailSize: const ThumbnailSize.square(240),
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => ColoredBox(
-                  color: p.surface2,
-                  child: Icon(Icons.broken_image_outlined, color: p.muted),
+                  color: p.sunk,
+                  child: Icon(Icons.broken_image_outlined, color: p.tx3),
                 ),
-                frameBuilder: (_, child, frame, sync) => frame == null && !sync ? ColoredBox(color: p.surface2) : child,
+                frameBuilder: (_, child, frame, sync) => frame == null && !sync ? ColoredBox(color: p.sunk) : child,
               ),
             ),
           ),
@@ -343,14 +357,14 @@ class _Tile extends StatelessWidget {
               bottom: 4,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(99)),
+                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.play_arrow_rounded, size: 13, color: Colors.white),
                     Text(
                       formatDuration(asset.videoDuration),
-                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600, fontFeatures: Ds.tabular),
                     ),
                   ],
                 ),
@@ -364,10 +378,10 @@ class _Tile extends StatelessWidget {
               height: 22,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: selected ? p.accent : Colors.black26,
+                color: selected ? p.ac : Colors.black26,
                 border: Border.all(color: Colors.white, width: 2),
               ),
-              child: selected ? Icon(Icons.check, size: 14, color: p.accentInk) : null,
+              child: selected ? Icon(Icons.check, size: 14, color: p.acTx) : null,
             ),
           ),
         ],

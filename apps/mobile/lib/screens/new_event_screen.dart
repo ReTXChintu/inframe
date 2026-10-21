@@ -76,57 +76,74 @@ class _NewEventScreenState extends State<NewEventScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
     final canCreate = _name.text.trim().isNotEmpty && _storage.ready;
     final dateFmt = DateFormat('d MMM yyyy');
 
     return Scaffold(
       appBar: AppBar(title: const Text('New event')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+        padding: EdgeInsets.fromLTRB(Ds.pagePad(context), 4, Ds.pagePad(context), 32),
         children: [
           ErrorBox(_error),
           if (_error != null) const SizedBox(height: 12),
           SectionCard(
             title: 'The event',
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              TextField(
-                controller: _name,
-                textCapitalization: TextCapitalization.sentences,
-                maxLength: 100,
-                decoration: InputDecoration(labelText: 'Name', hintText: 'Goa with the gang', errorText: _fields['name']),
-                onChanged: (_) => setState(() {}),
-              ),
-              Wrap(spacing: 8, runSpacing: 8, children: [
-                for (final (value, label, icon) in _kinds)
-                  ChoiceChip(
-                    selected: _kind == value,
-                    avatar: Icon(icon, size: 18, color: _kind == value ? p.bg : p.ink2),
-                    label: Text(label, style: TextStyle(color: _kind == value ? p.bg : p.ink2)),
-                    onSelected: (_) => setState(() => _kind = value),
-                  ),
-              ]),
-              const SizedBox(height: 14),
-              Row(children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.event_outlined, size: 18),
-                    label: Text(_starts == null ? 'Start date' : dateFmt.format(_starts!)),
-                    onPressed: () => _pickDate(true),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DsTextField(
+                  controller: _name,
+                  textCapitalization: TextCapitalization.sentences,
+                  maxLength: 100,
+                  label: 'Name',
+                  hint: 'Goa with the gang',
+                  error: _fields['name'],
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 4),
+                DsLabel(
+                  'Kind',
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final (value, label, icon) in _kinds)
+                        DsChoiceChip(selected: _kind == value, icon: icon, label: label, onSelected: () => setState(() => _kind = value)),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.event_available_outlined, size: 18),
-                    label: Text(_ends == null ? 'End date' : dateFmt.format(_ends!)),
-                    onPressed: () => _pickDate(false),
-                  ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DsLabel(
+                        'Starts',
+                        child: _DateButton(
+                          icon: Icons.event_outlined,
+                          text: _starts == null ? 'Start date' : dateFmt.format(_starts!),
+                          chosen: _starts != null,
+                          onTap: () => _pickDate(true),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DsLabel(
+                        'Ends',
+                        child: _DateButton(
+                          icon: Icons.event_available_outlined,
+                          text: _ends == null ? 'End date' : dateFmt.format(_ends!),
+                          chosen: _ends != null,
+                          onTap: () => _pickDate(false),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ]),
-            ]),
+              ],
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           SectionCard(
             title: 'Where photos are stored',
             subtitle: 'Photos go into your Google Drive or MEGA folder, with thumbnails in a hidden “.inframe” sub-folder.',
@@ -135,6 +152,58 @@ class _NewEventScreenState extends State<NewEventScreen> {
           const SizedBox(height: 20),
           BusyButton(label: 'Create event', busy: _busy, onPressed: canCreate ? _create : null),
         ],
+      ),
+    );
+  }
+}
+
+/// A select styled as a field (§7.2): 52 h, radius 10, ln2 border, the
+/// value on the left (500 once chosen) and a trailing chevron.
+class _DateButton extends StatelessWidget {
+  const _DateButton({required this.icon, required this.text, required this.chosen, required this.onTap});
+  final IconData icon;
+  final String text;
+  final bool chosen;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = DsColors.of(context);
+    final radius = BorderRadius.circular(Ds.rMd);
+    return Material(
+      color: p.sf,
+      shape: RoundedRectangleBorder(
+        borderRadius: radius,
+        side: BorderSide(color: p.ln2),
+      ),
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        child: SizedBox(
+          height: 52,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Icon(icon, size: 18, color: p.tx3),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    text,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: chosen ? p.tx : p.tx3,
+                      fontWeight: chosen ? FontWeight.w500 : FontWeight.w400,
+                      fontFeatures: Ds.tabular,
+                    ),
+                  ),
+                ),
+                Icon(Icons.expand_more, size: 20, color: p.tx2),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

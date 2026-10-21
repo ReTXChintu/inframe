@@ -8,7 +8,7 @@ import { errorMessage } from "@/components/feedback";
 import { Lightbox } from "@/components/Lightbox";
 import { GridSkeleton, PhotoGrid, usePhotoFeed } from "@/components/PhotoGrid";
 import { SelectionBar } from "@/components/SelectionBar";
-import { Avatar, cx, EmptyState, LinkButton } from "@/components/ui";
+import { Avatar, cx, EmptyState, ErrorBanner, LinkButton } from "@/components/ui";
 
 /** Every photo you (or a family member) are in, across all your events. */
 export function MyPhotosPage() {
@@ -36,8 +36,8 @@ export function MyPhotosPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-3xl font-semibold sm:text-4xl">My photos</h1>
-        <p className="mt-1.5 text-[15px] text-muted">From every event you're part of.</p>
+        <h1 className="text-title-page">My photos</h1>
+        <p className="mt-1 text-body-l text-tx2">From every event you're part of.</p>
       </div>
       {enrolled.length > 1 && (
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0" role="tablist" aria-label="Whose photos">
@@ -53,13 +53,13 @@ export function MyPhotosPage() {
                   setSelected(new Set());
                 }}
                 className={cx(
-                  "inline-flex h-11 shrink-0 items-center gap-2 rounded-full border py-1 pr-4 pl-1 text-[14px] font-medium",
-                  on ? "border-ink bg-ink text-bg" : "border-line bg-surface hover:bg-surface-2",
+                  "inline-flex h-10 shrink-0 items-center gap-2 rounded-full border py-1 pr-3.5 pl-1 text-[13px] font-medium transition-colors duration-[120ms]",
+                  on ? "border-tx bg-tx text-bg" : "border-ln2 bg-sf text-tx hover:bg-sf2",
                 )}
               >
-                <Avatar name={p.name} src={p.selfieUrl} size={32} />
+                <Avatar name={p.name} src={p.selfieUrl} size={30} />
                 {p.kind === "self" ? "You" : p.name}
-                <span className={cx("tabular-nums", on ? "text-bg/60" : "text-muted")}>{p.matchCount}</span>
+                <span className={cx("num font-semibold", on ? "text-bg/70" : "text-tx3")}>{p.matchCount}</span>
               </button>
             );
           })}
@@ -68,7 +68,7 @@ export function MyPhotosPage() {
       {feed.isLoading ? (
         <GridSkeleton />
       ) : feed.error ? (
-        <p className="text-danger">{errorMessage(feed.error)}</p>
+        <ErrorBanner>{errorMessage(feed.error)}</ErrorBanner>
       ) : feed.photos.length === 0 ? (
         <EmptyState
           icon={<Images className="size-8" />}
@@ -77,7 +77,7 @@ export function MyPhotosPage() {
         />
       ) : (
         <>
-          <p className="text-[13px] text-muted">
+          <p className="num text-body-s text-tx3">
             {plural(feed.photos.length, "photo")}
             {feed.hasNextPage ? "+" : ""}
           </p>

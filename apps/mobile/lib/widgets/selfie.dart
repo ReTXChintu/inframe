@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../api/api.dart';
 import '../api/models.dart';
+import '../theme.dart';
 import 'common.dart';
 
 /// Take (or pick) one clear photo of a person and enrol it. The server checks
@@ -14,40 +15,68 @@ Future<bool> captureSelfie(BuildContext context, Person person) async {
     context: context,
     showDragHandle: true,
     builder: (ctx) => SafeArea(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-          child: Text(
-            "Face the camera in good light — no sunglasses or mask, and only ${person.isSelf ? 'you' : person.name} in the shot. "
-            "It's used only to find ${person.isSelf ? 'your' : 'their'} photos.",
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const DsIconTile(Icons.face_retouching_natural),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(person.isSelf ? 'Your selfie' : 'Photo of ${person.name}', style: Theme.of(ctx).textTheme.titleLarge)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  "Face the camera in good light — no sunglasses or mask, and only ${person.isSelf ? 'you' : person.name} in the shot. "
+                  "It's used only to find ${person.isSelf ? 'your' : 'their'} photos.",
+                  style: Theme.of(ctx).textTheme.bodyLarge!.copyWith(color: DsColors.of(ctx).tx2),
+                ),
+              ],
+            ),
           ),
-        ),
-        ListTile(leading: const Icon(Icons.photo_camera_front_outlined), title: const Text('Take a photo'), onTap: () => Navigator.pop(ctx, ImageSource.camera)),
-        ListTile(leading: const Icon(Icons.photo_outlined), title: const Text('Choose from gallery'), onTap: () => Navigator.pop(ctx, ImageSource.gallery)),
-        const SizedBox(height: 8),
-      ]),
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            minTileHeight: 56,
+            leading: const Icon(Icons.photo_camera_front_outlined),
+            title: const Text('Take a photo'),
+            onTap: () => Navigator.pop(ctx, ImageSource.camera),
+          ),
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            minTileHeight: 56,
+            leading: const Icon(Icons.photo_outlined),
+            title: const Text('Choose from gallery'),
+            onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
     ),
   );
   if (source == null || !context.mounted) return false;
 
-  final file = await ImagePicker().pickImage(
-    source: source,
-    preferredCameraDevice: CameraDevice.front,
-    maxWidth: 1600,
-    maxHeight: 1600,
-    imageQuality: 90,
-  );
+  final file = await ImagePicker().pickImage(source: source, preferredCameraDevice: CameraDevice.front, maxWidth: 1600, maxHeight: 1600, imageQuality: 90);
   if (file == null || !context.mounted) return false;
 
   final messenger = ScaffoldMessenger.of(context);
-  messenger.showSnackBar(SnackBar(
-    duration: const Duration(minutes: 1),
-    content: Row(children: [
-      const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-      const SizedBox(width: 12),
-      Text('Finding ${person.isSelf ? 'you' : person.name} in photos…'),
-    ]),
-  ));
+  messenger.showSnackBar(
+    SnackBar(
+      duration: const Duration(minutes: 1),
+      content: Row(
+        children: [
+          SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2, color: DsColors.of(context).bg)),
+          const SizedBox(width: 12),
+          Text('Finding ${person.isSelf ? 'you' : person.name} in photos…'),
+        ],
+      ),
+    ),
+  );
   try {
     final res = await api.upload<Map<String, dynamic>>(
       '/api/people/${person.id}/selfie',

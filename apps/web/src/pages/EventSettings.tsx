@@ -14,12 +14,12 @@ import { LoadingBlock } from "./Events";
 
 function Section({ id, title, description, children }: { id?: string; title: string; description?: string; children: ReactNode }) {
   return (
-    <Card className="scroll-mt-24 p-5 sm:p-6">
+    <Card className="scroll-mt-24 p-5">
       <section id={id} aria-labelledby={id ? `${id}-title` : undefined}>
-        <h2 id={id ? `${id}-title` : undefined} className="text-lg font-semibold">
+        <h2 id={id ? `${id}-title` : undefined} className="text-title-section">
           {title}
         </h2>
-        {description && <p className="mt-1 text-[14px] text-muted">{description}</p>}
+        {description && <p className="mt-1 text-body text-tx2">{description}</p>}
         <div className="mt-4">{children}</div>
       </section>
     </Card>
@@ -41,10 +41,10 @@ export function EventSettingsPage() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <Link to={`/events/${event.id}`} className="inline-flex items-center gap-1.5 text-[14px] text-muted hover:text-ink">
+        <Link to={`/events/${event.id}`} className="inline-flex items-center gap-1.5 rounded-md text-body font-medium text-tx2 hover:text-tx">
           <ArrowLeft className="size-4" /> {event.name}
         </Link>
-        <h1 className="mt-2 text-3xl font-semibold">{event.isHost ? "Event settings" : "Event details"}</h1>
+        <h1 className="mt-2 text-title-page">{event.isHost ? "Event settings" : "Event details"}</h1>
       </div>
       {/* Wide screens: the event itself on the left, people + storage on the right. */}
       <div className="grid items-start gap-5 xl:grid-cols-2">
@@ -79,14 +79,14 @@ function usePatchEvent(event: EventDetail) {
 function ReadOnlyDetails({ event }: { event: EventDetail }) {
   return (
     <Section title="About">
-      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-[15px]">
-        <dt className="text-muted">Kind</dt>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2.5 text-body">
+        <dt className="text-label leading-5 text-tx2">Kind</dt>
         <dd>{KIND_LABEL[event.kind]}</dd>
-        <dt className="text-muted">Dates</dt>
+        <dt className="text-label leading-5 text-tx2">Dates</dt>
         <dd>{formatRange(event.startsOn, event.endsOn) ?? "—"}</dd>
-        <dt className="text-muted">Hosted by</dt>
+        <dt className="text-label leading-5 text-tx2">Hosted by</dt>
         <dd>{event.owner.name}</dd>
-        <dt className="text-muted">Your role</dt>
+        <dt className="text-label leading-5 text-tx2">Your role</dt>
         <dd>{ROLE_LABEL[event.role]}</dd>
       </dl>
     </Section>
@@ -126,7 +126,7 @@ function GeneralSection({ event }: { event: EventDetail }) {
           <TextField label="Ends" type="date" value={endsOn} min={startsOn || undefined} onChange={(e) => setEndsOn(e.target.value)} />
         </div>
         <div className="flex justify-end">
-          <Button type="submit" disabled={!dirty || !name.trim()} loading={patch.isPending}>
+          <Button type="submit" size="lg" disabled={!dirty || !name.trim()} loading={patch.isPending}>
             Save changes
           </Button>
         </div>
@@ -151,7 +151,7 @@ function PrivacySection({ event }: { event: EventDetail }) {
 
   return (
     <Section title="Sharing & privacy" description="Hosts always see everything. These settings apply to guests.">
-      <div className="divide-y divide-line">
+      <div className="divide-y divide-ln">
         <Toggle
           label="Anyone with the code or link can join"
           description="Turn off to allow only people you invite by email."
@@ -184,9 +184,9 @@ function PrivacySection({ event }: { event: EventDetail }) {
         />
       </div>
       {event.joinCode && (
-        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-surface-2 px-4 py-3">
-          <span className="text-[13px] text-muted">Join code</span>
-          <span className="font-display text-xl font-semibold tracking-[0.08em] tabular-nums">{prettyCode(event.joinCode)}</span>
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg bg-sf2 px-4 py-3 shadow-[inset_0_0_0_1px_var(--ln)]">
+          <span className="text-label text-tx2">Join code</span>
+          <span className="font-mono text-[22px] leading-7 font-medium tracking-[0.08em]">{prettyCode(event.joinCode)}</span>
           <Button
             size="sm"
             variant="ghost"
@@ -254,17 +254,17 @@ function StorageSection({ event }: { event: EventDetail }) {
     >
       {s.connected && s.provider ? (
         <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-3 rounded-2xl border border-line p-4">
+          <div className="flex items-center gap-3 rounded-xl border border-ln bg-sf2 p-3.5">
             <ProviderMark provider={s.provider} className="size-7" />
             <div className="min-w-0 flex-1">
-              <p className="font-medium">
-                {s.folderName ?? "Folder"} <span className="font-normal text-muted">· {PROVIDER_LABEL[s.provider]}</span>
+              <p className="text-title-card">
+                {s.folderName ?? "Folder"} <span className="font-normal text-tx3">· {PROVIDER_LABEL[s.provider]}</span>
               </p>
-              <p className="truncate text-[13px] text-muted">
+              <p className="num truncate text-body-s text-tx3">
                 {s.accountLabel ? `${s.accountLabel} · ` : ""}
                 {s.syncState === "syncing" ? "Syncing now…" : `Last checked ${timeAgo(s.lastSyncedAt)}`}
               </p>
-              {(s.error || s.syncError) && <p className="mt-1 text-[13px] text-warn">{s.error ?? s.syncError}</p>}
+              {(s.error || s.syncError) && <p className="mt-1 text-body-s font-medium text-warn">{s.error ?? s.syncError}</p>}
             </div>
             {s.folderUrl && (
               <a
@@ -273,9 +273,9 @@ function StorageSection({ event }: { event: EventDetail }) {
                 rel="noreferrer"
                 aria-label="Open folder in a new tab"
                 title="Open folder in a new tab"
-                className="inline-flex size-10 items-center justify-center rounded-full hover:bg-surface-2"
+                className="inline-flex size-10 items-center justify-center rounded-full text-tx2 hover:bg-sf hover:text-tx"
               >
-                <ExternalLink className="size-4" />
+                <ExternalLink className="size-[18px]" />
               </a>
             )}
           </div>
@@ -294,15 +294,15 @@ function StorageSection({ event }: { event: EventDetail }) {
         </div>
       ) : (
         <div className="flex flex-col items-start gap-3">
-          <p className="text-[15px] text-warn">
+          <p className="w-full rounded-lg bg-warn-soft px-4 py-3 text-body-l font-medium text-warn">
             {s.pending
               ? "No folder yet. Connect one to start adding photos."
               : "No storage folder connected — nobody can add photos until one is set."}
           </p>
           {event.isOwner ? (
-            <Button onClick={() => setChanging(true)}>Connect a folder</Button>
+            <Button size="lg" onClick={() => setChanging(true)}>Connect a folder</Button>
           ) : (
-            <p className="text-[14px] text-muted">Only the owner can connect storage.</p>
+            <p className="text-body text-tx2">Only the owner can connect storage.</p>
           )}
         </div>
       )}
@@ -313,6 +313,7 @@ function StorageSection({ event }: { event: EventDetail }) {
         title="Choose the event's storage"
         footer={
           <Button
+            size="lg"
             loading={change.isPending}
             disabled={!choice.connectionId || (choice.mode === "existing" && !choice.folder.trim())}
             onClick={async () => {
@@ -349,7 +350,7 @@ function MaintenanceSection({ event }: { event: EventDetail }) {
   return (
     <Section title="Photo processing">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <p className="flex-1 text-[14px] text-muted">
+        <p className="num flex-1 text-body text-tx2">
           {event.counts.failed ? `${plural(event.counts.failed, "photo")} failed to process.` : "Every photo processed fine."}{" "}
           {event.counts.processing ? `${plural(event.counts.processing, "photo")} in progress.` : ""}
         </p>
@@ -409,24 +410,24 @@ function MembersSection({ event }: { event: EventDetail }) {
 
   return (
     <Section title={`People · ${event.counts.members}`}>
-      <ul className="divide-y divide-line">
+      <ul className="divide-y divide-ln">
         {(members.data ?? []).map((m) => {
           const canRemove = !m.isYou && m.role !== "owner" && event.isHost && (m.role === "member" || event.isOwner);
           return (
             <li key={m.userId} className="flex items-center gap-3 py-3">
               <Avatar name={m.name} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">
-                  {m.name} {m.isYou && <span className="font-normal text-muted">(you)</span>}
+                <p className="truncate text-[14px] font-medium">
+                  {m.name} {m.isYou && <span className="font-normal text-tx3">(you)</span>}
                 </p>
-                {m.email && <p className="truncate text-[13px] text-muted">{m.email}</p>}
+                {m.email && <p className="truncate text-body-s text-tx3">{m.email}</p>}
               </div>
               {event.isOwner && m.role !== "owner" ? (
                 <select
                   aria-label={`Role for ${m.name}`}
                   value={m.role}
                   onChange={(e) => setRole.mutate({ userId: m.userId, role: e.target.value as "cohost" | "member" })}
-                  className="h-8 rounded-full border border-line bg-surface px-3 text-[13px]"
+                  className="h-9 rounded-md border border-ln2 bg-sf px-2.5 text-[13px] font-semibold text-tx"
                 >
                   <option value="member">Guest</option>
                   <option value="cohost">Co-host</option>
@@ -450,14 +451,14 @@ function MembersSection({ event }: { event: EventDetail }) {
       </ul>
       {event.isHost && (invites.data?.length ?? 0) > 0 && (
         <div className="mt-4">
-          <p className="mb-2 text-[13px] font-medium text-muted">Invited, not joined yet</p>
+          <p className="mb-2 text-label text-tx2">Invited, not joined yet</p>
           <ul className="flex flex-col gap-1.5">
             {invites.data!.map((inv) => (
-              <li key={inv.id} className="flex items-center gap-3 rounded-xl bg-surface-2 px-3 py-2 text-[14px]">
+              <li key={inv.id} className="flex items-center gap-3 min-h-12 rounded-lg bg-sf2 px-3 py-2 text-body shadow-[inset_0_0_0_1px_var(--ln)]">
                 <span className="min-w-0 flex-1 truncate">{inv.email}</span>
                 {inv.role === "cohost" && <Badge>Co-host</Badge>}
-                <span className="text-[12px] text-muted">{timeAgo(inv.createdAt)}</span>
-                <button className="text-[13px] font-medium text-danger hover:underline" onClick={() => revoke.mutate(inv.id)}>
+                <span className="num text-caption text-tx3">{timeAgo(inv.createdAt)}</span>
+                <button className="min-h-9 rounded-md px-2 text-[13px] font-semibold text-crit hover:bg-crit-soft" onClick={() => revoke.mutate(inv.id)}>
                   Revoke
                 </button>
               </li>
@@ -466,7 +467,7 @@ function MembersSection({ event }: { event: EventDetail }) {
         </div>
       )}
       <div className="mt-4">
-        <Button variant="secondary" icon={<UserPlus className="size-4" />} onClick={() => setShareOpen(true)}>
+        <Button variant="secondary" icon={<UserPlus className="size-[18px]" />} onClick={() => setShareOpen(true)}>
           Invite people
         </Button>
       </div>
@@ -504,7 +505,7 @@ function DangerSection({ event }: { event: EventDetail }) {
     <Section title={event.isOwner ? "Delete event" : "Leave event"}>
       {event.isOwner ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <p className="flex-1 text-[14px] text-muted">
+          <p className="flex-1 text-body text-tx2">
             Removes the event, its albums and face matches from InFrame for everyone. The photo files stay in your storage folder.
           </p>
           <Button
@@ -519,10 +520,9 @@ function DangerSection({ event }: { event: EventDetail }) {
         </div>
       ) : (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <p className="flex-1 text-[14px] text-muted">You'll stop seeing this event. Photos you added stay in it.</p>
+          <p className="flex-1 text-body text-tx2">You'll stop seeing this event. Photos you added stay in it.</p>
           <Button
-            variant="secondary"
-            className="text-danger"
+            variant="danger"
             loading={leave.isPending}
             onClick={async () => {
               if (await confirm({ title: `Leave “${event.name}”?`, confirmLabel: "Leave", danger: true })) leave.mutate();
