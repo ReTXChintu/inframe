@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireUser } from "../auth/guard.js";
-import { hashPassword, isMobileClient, startSession, signAccessToken, verifyPassword } from "../auth/tokens.js";
+import { REFRESH_COOKIE } from "../auth/tokens.js";
 import { one, query, tx } from "../db/pool.js";
 import { AppError, badRequest, conflict, forbidden, notFound, parse } from "../lib/errors.js";
 import { decodable, forModel, makeSelfie } from "../lib/images.js";
@@ -10,7 +10,7 @@ import { extractFaces, ModelError } from "../model/client.js";
 import { matchPerson } from "../services/matching.js";
 import { modelSettings } from "../services/settings.js";
 import { serializeUser } from "./auth.js";
-import { parseId, password, PERSON_COLUMNS, personName, serializePerson, type PersonRow } from "./shared.js";
+import { parseId, PERSON_COLUMNS, personName, serializePerson, type PersonRow } from "./shared.js";
 
 const MAX_FAMILY = 12;
 
@@ -54,44 +54,21 @@ export async function meRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post("/api/me/password", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
-    const body = parse(z.object({ currentPassword: z.string().min(1, "Enter your current password."), newPassword: password }), req.body);
-    const user = await one<{ password_hash: string }>("SELECT password_hash FROM users WHERE id = $1", [req.user.id]);
-    if (!user || !(await verifyPassword(user.password_hash, body.currentPassword))) {
-      throw new AppError(400, "invalid_credentials", "Your current password isn't right.", {
-        fields: { currentPassword: "Your current password isn't right." },
-      });
-    }
-    const hash = await hashPassword(body.newPassword);
-    const updated = await tx(async (db) => {
-      const row = await one<{ token_version: number }>(
-        "UPDATE users SET password_hash = $2, token_version = token_version + 1, updated_at = now() WHERE id = $1 RETURNING token_version",
-        [req.user.id, hash],
-        db,
-      );
-      await db.query("DELETE FROM sessions WHERE user_id = $1", [req.user.id]);
-      const refreshToken = await startSession(reply, req.user.id, req.headers["user-agent"], db);
-      return { ...row!, refreshToken };
-    });
-    // Other devices are signed out; this one continues with fresh tokens.
-    return {
-      accessToken: await signAccessToken(req.user.id, updated.token_version),
-      ...(isMobileClient(req) ? { refreshToken: updated.refreshToken } : {}),
-    };
-  });
-
+  /**
+   * Accounts have no password of their own (sign-in is through the identity
+   * server), so deleting one takes a typed confirmation instead: "DELETE" or
+   * the account's email address.
+   */
   app.delete("/api/me", async (req, reply) => {
-    const body = parse(z.object({ password: z.string().min(1, "Enter your password to confirm.") }), req.body);
-    const user = await one<{ password_hash: string }>("SELECT password_hash FROM users WHERE id = $1", [req.user.id]);
-    if (!user || !(await verifyPassword(user.password_hash, body.password))) {
-      throw new AppError(400, "invalid_credentials", "That password isn't right.", {
-        fields: { password: "That password isn't right." },
-      });
+    const body = parse(z.object({ confirm: z.string().trim().min(1, `Type DELETE to confirm.`).max(254) }), req.body);
+    if (body.confirm !== "DELETE" && body.confirm.toLowerCase() !== req.user.email.toLowerCase()) {
+      throw new AppError(400, "confirmation", "Type DELETE to confirm.", { fields: { confirm: "Type DELETE to confirm." } });
     }
     // Cascades to sessions, people (with selfies), connections and owned events.
     // Files in Drive/MEGA are left where they are.
     await query("DELETE FROM users WHERE id = $1", [req.user.id]);
-    reply.clearCookie("inframe_rt", { path: "/api/auth" });
+    reply.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
+    // The shared identity server account stays (SpendLog and Trippin use it too); signing in again starts a fresh InFrame account.
     return { ok: true };
   });
 

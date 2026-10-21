@@ -1,5 +1,4 @@
 import { SignJWT, jwtVerify } from "jose";
-import { hash as argonHash, verify as argonVerify } from "@node-rs/argon2";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { config } from "../config.js";
 import { one, query, type Queryable } from "../db/pool.js";
@@ -9,9 +8,6 @@ const jwtKey = new TextEncoder().encode(config.JWT_SECRET);
 const ACCESS_TTL = "15m";
 const REFRESH_TTL_DAYS = 30;
 export const REFRESH_COOKIE = "inframe_rt";
-
-export const hashPassword = (password: string) => argonHash(password);
-export const verifyPassword = (hash: string, password: string) => argonVerify(hash, password).catch(() => false);
 
 export async function signAccessToken(userId: string, tokenVersion: number) {
   return new SignJWT({ tv: tokenVersion })

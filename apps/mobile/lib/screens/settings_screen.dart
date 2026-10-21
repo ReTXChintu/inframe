@@ -145,10 +145,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Card(
             child: Column(children: [
               ListTile(
-                leading: const Icon(Icons.lock_outline),
-                title: const Text('Change password'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => showModalBottomSheet<void>(context: context, isScrollControlled: true, showDragHandle: true, builder: (_) => const _PasswordSheet()),
+                leading: const Icon(Icons.account_circle_outlined),
+                title: const Text('Your account'),
+                subtitle: const Text('The same sign-in for InFrame, SpendLog and Trippin. Its password is managed there.'),
               ),
               const Divider(),
               ListTile(
@@ -183,63 +182,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-class _PasswordSheet extends StatefulWidget {
-  const _PasswordSheet();
-
-  @override
-  State<_PasswordSheet> createState() => _PasswordSheetState();
-}
-
-class _PasswordSheetState extends State<_PasswordSheet> {
-  final _current = TextEditingController();
-  final _next = TextEditingController();
-  final _confirm = TextEditingController();
-  bool _busy = false;
-  Map<String, String> _fields = {};
-
-  Future<void> _submit() async {
-    if (_next.text != _confirm.text) {
-      setState(() => _fields = {'confirm': "The passwords don't match."});
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _fields = {};
-    });
-    try {
-      final res = await api.post<Map<String, dynamic>>('/api/me/password', {'currentPassword': _current.text, 'newPassword': _next.text});
-      if (!mounted) return;
-      await context.read<Session>().adoptTokens(res);
-      if (mounted) {
-        Navigator.pop(context);
-        toast(context, 'Password changed. Other devices were signed out.');
-      }
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _fields = e.fields.isNotEmpty ? e.fields : {'newPassword': e.message});
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
-      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('Change password', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 16),
-        PasswordField(controller: _current, label: 'Current password', error: _fields['currentPassword'], autofillHints: const [AutofillHints.password]),
-        const SizedBox(height: 12),
-        PasswordField(controller: _next, label: 'New password', error: _fields['newPassword'], hint: '8+ characters, a letter and a number.', autofillHints: const [AutofillHints.newPassword]),
-        const SizedBox(height: 12),
-        PasswordField(controller: _confirm, label: 'Confirm new password', error: _fields['confirm'], onSubmitted: (_) => _submit()),
-        const SizedBox(height: 18),
-        BusyButton(label: 'Change password', busy: _busy, onPressed: _submit),
-      ]),
-    );
-  }
-}
-
 class _DeleteSheet extends StatefulWidget {
   const _DeleteSheet();
 
@@ -248,9 +190,11 @@ class _DeleteSheet extends StatefulWidget {
 }
 
 class _DeleteSheetState extends State<_DeleteSheet> {
-  final _password = TextEditingController();
+  final _confirm = TextEditingController();
   bool _busy = false;
   String? _error;
+
+  bool get _confirmed => _confirm.text.trim() == 'DELETE';
 
   Future<void> _submit() async {
     setState(() {
@@ -258,12 +202,12 @@ class _DeleteSheetState extends State<_DeleteSheet> {
       _error = null;
     });
     try {
-      await api.delete<dynamic>('/api/me', {'password': _password.text});
+      await api.delete<dynamic>('/api/me', {'confirm': _confirm.text.trim()});
       if (!mounted) return;
       Navigator.pop(context);
       await context.read<Session>().signOut();
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.fields['password'] ?? e.message);
+      if (mounted) setState(() => _error = e.fields['confirm'] ?? e.message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -279,15 +223,23 @@ class _DeleteSheetState extends State<_DeleteSheet> {
         const SizedBox(height: 8),
         Text(
           'Your selfies, family members and storage connections are deleted, and events you own are removed for everyone. '
-          'Photo files in your Drive/MEGA stay where they are.',
+          'Photo files in your Drive/MEGA stay where they are. Your sign-in account itself stays, for SpendLog and Trippin.',
           style: TextStyle(color: p.muted),
         ),
         const SizedBox(height: 16),
-        PasswordField(controller: _password, label: 'Your password', error: _error, onSubmitted: (_) => _submit()),
+        TextField(
+          controller: _confirm,
+          autocorrect: false,
+          enableSuggestions: false,
+          textCapitalization: TextCapitalization.characters,
+          decoration: InputDecoration(labelText: 'Type DELETE to confirm', errorText: _error),
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => _confirmed ? _submit() : null,
+        ),
         const SizedBox(height: 18),
         FilledButton(
           style: FilledButton.styleFrom(backgroundColor: p.danger, foregroundColor: Colors.white),
-          onPressed: _busy || _password.text.isEmpty ? null : _submit,
+          onPressed: _busy || !_confirmed ? null : _submit,
           child: _busy ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Delete forever'),
         ),
       ]),

@@ -2,7 +2,7 @@
 
 Shared photo albums for trips, weddings and parties. Everyone adds photos, and InFrame uses face recognition to find every photo you, or your family, are in.
 
-- **Sign up / sign in** with email and password; forgot-password by email.
+- **Sign in with your account**: one account for InFrame, SpendLog and Trippin, through the shared OpenID Connect identity server. InFrame keeps no passwords.
 - **Events** (trip / wedding / party / other) with dates, a cover, albums, and roles: **owner**, **co-host**, **guest**.
 - **Invite people** with an 8-character code (`XXXX-XXXX`), a link, a QR code, or by email. Email invitees join with one click, as a guest or a co-host.
 - **Storage is yours, and the server keeps no files.** Each event lives in a Google Drive or MEGA folder that the owner connects:
@@ -84,8 +84,20 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 
 `ENCRYPTION_KEY` encrypts stored Google refresh tokens and MEGA passwords. Changing it means everyone reconnects their storage.
 
+### Sign-in (identity server)
+InFrame, SpendLog and Trippin share one OpenID Connect identity server; InFrame has no sign-up or passwords of its own. Register two clients there:
+
+| Client | Type | Redirect URI | Post-logout redirect URI |
+|--------|------|--------------|--------------------------|
+| `inframe-web` | confidential | `{APP_URL}/api/auth/oidc/callback` | `{APP_URL}/login` |
+| `inframe-mobile` | public, PKCE | `app.inframe.android:/oauth2redirect` | `app.inframe.android:/oauth2redirect` |
+
+Both use the scopes `openid email profile offline_access`. Then set `OIDC_ISSUER` and `OIDC_CLIENT_SECRET` in `.env` (`OIDC_REDIRECT_URI` / `OIDC_POST_LOGOUT_URI` only if they differ from the defaults above).
+
+The identity server only proves who someone is. After that InFrame runs on its own tokens as before: a 15-minute access token, a rotating refresh session, and 24-hour upload tickets. On first sign-in an account is found by the identity server's `sub`, else an existing InFrame account with the same **verified** email is linked, else a new one is created. Unverified emails are refused.
+
 ### The super admin
-The **first account that signs up becomes the super admin**. It gets an **Admin** page (header menu, or Settings on a phone) that manages, without touching `.env` or restarting:
+The **first account that signs in becomes the super admin**. It gets an **Admin** page (header menu, or Settings on a phone) that manages, without touching `.env` or restarting:
 - **Face model:** URL, API key and header, timeout, and match strictness, with a *Test connection* button.
 - **Google Drive:** the OAuth client ID and secret, with the redirect URI ready to copy.
 - **Email (SMTP):** host, port, TLS, username, password and from-address, with a *Send test email* button.
@@ -117,13 +129,13 @@ Google Cloud console:
 5. Add the authorised redirect URI `{APP_URL}/api/storage/google/callback`, e.g. `http://localhost:5173/api/storage/google/callback`.
 6. Paste the client ID and secret into **Admin → Settings → Google Drive**, or put them in `.env`.
 
-This is used only to reach the storage folder; sign-in to InFrame stays email + password. It uses the full `drive` scope because owners can point an event at an existing folder that already holds photos. A public launch needs Google's verification for that scope.
+This is used only to reach the storage folder; sign-in to InFrame goes through the identity server. It uses the full `drive` scope because owners can point an event at an existing folder that already holds photos. A public launch needs Google's verification for that scope.
 
 ### 5. MEGA (optional)
 Nothing to configure on the server. Owners connect MEGA in **Settings → Storage** with their MEGA email and password; InFrame stores them encrypted. MEGA accounts with two-factor login can't be used, because the login can't be kept alive.
 
 ### 6. Email (optional in development)
-Set SMTP in **Admin → Settings → Email**, or with `SMTP_*` / `MAIL_FROM` in `.env`, for password resets and invites. Without `SMTP_HOST`, emails are printed to the server log, so you can click the links locally.
+Set SMTP in **Admin → Settings → Email**, or with `SMTP_*` / `MAIL_FROM` in `.env`, for event invites. Without `SMTP_HOST`, emails are printed to the server log, so you can click the links locally.
 
 ### Trying it without Google or MEGA
 Set `DEV_MEMORY_STORAGE=true`. A **Dev memory storage** option then appears when you create an event, and the whole flow works against it: upload, thumbnails, faces, sync, ZIP. Everything in it is lost when the server restarts, and the server refuses to start with it in production. Since those files live in the API process's memory, the API then runs the workers itself (`npm run dev` still starts a worker process, which exits straight away in this mode).
@@ -147,7 +159,7 @@ pm2 startOrReload ecosystem.config.cjs --update-env   # "inframe" (API + realtim
 ## Android app (`apps/mobile`)
 
 A Flutter app for the same API:
-- sign in / sign up / reset password
+- sign in with your account (the identity server, through `flutter_appauth`)
 - events with invites
 - join by code or by **scanning the QR**
 - galleries with a pinch-zoom viewer and save-to-phone
@@ -161,7 +173,7 @@ It keeps its refresh token in the phone's secure storage: it sends `x-inframe-cl
 
 ```bash
 cd apps/mobile
-flutter run --dart-define=API_BASE_URL=http://<server>:<port>     # on a phone or emulator
+flutter run --dart-define=API_BASE_URL=https://<server>:<port> --dart-define=OIDC_ISSUER=https://<identity-server>     # on a phone or emulator
 ```
 
 ### Releasing
@@ -188,7 +200,7 @@ The web app then shows **Get the Android app** (header, account menu, Settings, 
 Secrets the workflow needs:
 - **Signing:** `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`
 - **Deploy:** `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`
-- **Optional variable:** `API_BASE_URL`
+- **Optional variables:** `API_BASE_URL`, `OIDC_ISSUER` (the identity server the app signs in with)
 
 **Keep the signing keystore safe.** Android only installs updates signed with the same key.
 
@@ -198,7 +210,7 @@ Secrets the workflow needs:
 apps/server/src
   config.ts            env validation
   db/                  pool, migrator, migrations/*.sql
-  auth/                passwords (argon2), access/refresh tokens, request guard
+  auth/                OpenID Connect sign-in, access/refresh tokens, request guard
   model/client.ts      the external face-model client
   storage/             StorageProvider interface + Google Drive, MEGA and dev-memory adapters
   jobs/                pg-boss queues and the ingest / faces / sync workers
@@ -212,7 +224,7 @@ apps/web/src
 ```
 
 ## Security notes
-- Passwords use argon2id. Refresh tokens are httpOnly cookies, single-use and stored hashed. Changing or resetting a password signs out every device.
+- No passwords are stored: sign-in is through the identity server (code flow with PKCE, RS256 ID tokens checked against its JWKS). Refresh tokens are httpOnly cookies (`Secure` when `APP_URL` is https), single-use and stored hashed.
 - Every route checks event membership and role. Non-members get 404s, so event ids can't be probed.
 - Image URLs are HMAC-signed and expire within 12 hours. ZIP links are one-time.
 - Socket connections require a valid access token, and event rooms check membership.

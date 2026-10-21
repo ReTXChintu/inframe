@@ -11,6 +11,7 @@ dependencies:
   dio: ^5.11.1
   flutter:
     sdk: flutter
+  flutter_appauth: ^12.1.0
   flutter_secure_storage: ^11.2.0
   gal: ^2.3.3
   google_fonts: ^8.0.0

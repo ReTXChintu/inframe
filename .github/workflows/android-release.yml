@@ -14,8 +14,10 @@
 # Repository secrets (Settings → Secrets and variables → Actions):
 #   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
 #   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS
-# Optional repository variable:
-#   API_BASE_URL  (server the app talks to; default http://187.127.179.114:50010)
+# Repository variables:
+#   OIDC_ISSUER   (required for releases: the identity server the app signs in
+#                  with, e.g. https://id-x.duckdns.org:50011)
+#   API_BASE_URL  (optional: server the app talks to; default http://187.127.179.114:50010)
 
 name: Android release
 
@@ -51,6 +53,7 @@ jobs:
     env:
       HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
       API_BASE_URL: ${{ vars.API_BASE_URL || 'http://187.127.179.114:50010' }}
+      OIDC_ISSUER: ${{ vars.OIDC_ISSUER }}
     steps:
       - uses: actions/checkout@v4
 
@@ -83,6 +86,9 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-infos
 
+      - name: Test
+        run: flutter test
+
       - name: Release signing key
         if: env.HAS_KEYSTORE == 'true'
         env:
@@ -105,12 +111,19 @@ jobs:
           echo "::error::ANDROID_KEYSTORE_BASE64 is not set — a release APK must be signed with the InFrame key so phones can update it."
           exit 1
 
+      - name: Refuse releases that can't sign in
+        if: env.IS_RELEASE == 'true' && env.OIDC_ISSUER == ''
+        run: |
+          echo "::error::The OIDC_ISSUER repository variable is not set — the app signs in through the identity server and can't without it."
+          exit 1
+
       - name: Build APK
         run: |
           # Phones only (ARM); skipping x86_64 emulator code keeps the APK much smaller.
           flutter build apk --release \
             --target-platform android-arm,android-arm64 \
             --dart-define=API_BASE_URL="$API_BASE_URL" \
+            --dart-define=OIDC_ISSUER="$OIDC_ISSUER" \
             --build-name="${{ steps.version.outputs.name }}" \
             --build-number="${{ steps.version.outputs.code }}"
           cp build/app/outputs/flutter-apk/app-release.apk "$GITHUB_WORKSPACE/inframe-${{ steps.version.outputs.name }}.apk"

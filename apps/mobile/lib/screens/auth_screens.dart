@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/api.dart';
+import '../auth/identity.dart';
 import '../state/session.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -41,23 +42,23 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
+/// One button: sign in at the identity server shared by InFrame, SpendLog and
+/// Trippin. A first sign-in creates the InFrame account.
 class _LoginScreenState extends State<LoginScreen> {
-  final _email = TextEditingController();
-  final _password = TextEditingController();
   bool _busy = false;
   String? _error;
-  Map<String, String> _fields = {};
 
-  Future<void> _submit() async {
+  Future<void> _signIn() async {
     setState(() {
       _busy = true;
       _error = null;
-      _fields = {};
     });
     try {
-      await context.read<Session>().signIn(_email.text.trim(), _password.text);
+      await context.read<Session>().signIn();
+    } on IdentityException catch (e) {
+      if (mounted) setState(() => _error = e.message);
     } on ApiException catch (e) {
-      setState(() => e.fields.isNotEmpty ? _fields = e.fields : _error = e.message);
+      if (mounted) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -67,210 +68,20 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     return _AuthScaffold(
-      title: 'Welcome back',
+      title: 'Welcome to InFrame',
       subtitle: "Sign in to see your events and the photos you're in.",
       children: [
         ErrorBox(_error),
         if (_error != null) const SizedBox(height: 14),
-        AutofillGroup(
-          child: Column(children: [
-            TextField(
-              controller: _email,
-              keyboardType: TextInputType.emailAddress,
-              autofillHints: const [AutofillHints.email],
-              textInputAction: TextInputAction.next,
-              decoration: InputDecoration(labelText: 'Email', errorText: _fields['email']),
-            ),
-            const SizedBox(height: 14),
-            PasswordField(
-              controller: _password,
-              label: 'Password',
-              error: _fields['password'],
-              autofillHints: const [AutofillHints.password],
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => _submit(),
-            ),
-          ]),
+        BusyButton(label: 'Sign in', icon: Icons.login, busy: _busy, onPressed: _signIn),
+        const SizedBox(height: 14),
+        Text(
+          'One account for InFrame, SpendLog and Trippin. New here? Signing in creates your InFrame account.',
+          style: TextStyle(color: p.muted, fontSize: 14),
         ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())),
-            child: const Text('Forgot password?'),
-          ),
-        ),
-        const SizedBox(height: 8),
-        BusyButton(label: 'Sign in', busy: _busy, onPressed: _submit),
-        const SizedBox(height: 20),
-        Row(children: [
-          Text('New to InFrame?', style: TextStyle(color: p.muted)),
-          TextButton(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SignupScreen())),
-            child: const Text('Create an account', style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ]),
         const SizedBox(height: 24),
         const ServerLink(),
       ],
-    );
-  }
-}
-
-class SignupScreen extends StatefulWidget {
-  const SignupScreen({super.key});
-
-  @override
-  State<SignupScreen> createState() => _SignupScreenState();
-}
-
-class _SignupScreenState extends State<SignupScreen> {
-  final _name = TextEditingController();
-  final _email = TextEditingController();
-  final _password = TextEditingController();
-  final _confirm = TextEditingController();
-  bool _busy = false;
-  String? _error;
-  Map<String, String> _fields = {};
-
-  Future<void> _submit() async {
-    if (_password.text != _confirm.text) {
-      setState(() => _fields = {'confirm': "The passwords don't match."});
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _error = null;
-      _fields = {};
-    });
-    try {
-      await context.read<Session>().signUp(_name.text.trim(), _email.text.trim(), _password.text);
-      if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
-    } on ApiException catch (e) {
-      setState(() => e.fields.isNotEmpty ? _fields = e.fields : _error = e.message);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-          children: [
-            Text('Create your account', style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 6),
-            Text('Start a shared album, or join one with a code.', style: TextStyle(color: Palette.of(context).muted, fontSize: 15)),
-            const SizedBox(height: 24),
-            ErrorBox(_error),
-            if (_error != null) const SizedBox(height: 14),
-            TextField(
-              controller: _name,
-              textCapitalization: TextCapitalization.words,
-              autofillHints: const [AutofillHints.name],
-              textInputAction: TextInputAction.next,
-              decoration: InputDecoration(labelText: 'Your name', errorText: _fields['name']),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _email,
-              keyboardType: TextInputType.emailAddress,
-              autofillHints: const [AutofillHints.email],
-              textInputAction: TextInputAction.next,
-              decoration: InputDecoration(labelText: 'Email', errorText: _fields['email']),
-            ),
-            const SizedBox(height: 14),
-            PasswordField(
-              controller: _password,
-              label: 'Password',
-              error: _fields['password'],
-              hint: 'At least 8 characters, with a letter and a number.',
-              autofillHints: const [AutofillHints.newPassword],
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: 14),
-            PasswordField(
-              controller: _confirm,
-              label: 'Confirm password',
-              error: _fields['confirm'],
-              autofillHints: const [AutofillHints.newPassword],
-              onSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 22),
-            BusyButton(label: 'Create account', busy: _busy, onPressed: _submit),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class ForgotPasswordScreen extends StatefulWidget {
-  const ForgotPasswordScreen({super.key});
-
-  @override
-  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
-}
-
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
-  final _email = TextEditingController();
-  bool _busy = false;
-  bool _sent = false;
-  String? _error;
-
-  Future<void> _submit() async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await api.post<dynamic>('/api/auth/forgot-password', {'email': _email.text.trim()});
-      setState(() => _sent = true);
-    } on ApiException catch (e) {
-      setState(() => _error = e.message);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = Palette.of(context);
-    return Scaffold(
-      appBar: AppBar(),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-        children: _sent
-            ? [
-                Icon(Icons.mark_email_read_outlined, size: 40, color: p.accent),
-                const SizedBox(height: 16),
-                Text('Check your email', style: Theme.of(context).textTheme.headlineMedium),
-                const SizedBox(height: 8),
-                Text(
-                  "If an account exists for ${_email.text.trim()}, we've sent a link to choose a new password. "
-                  'Open it on any device — then sign in here with the new password.',
-                  style: TextStyle(color: p.muted, fontSize: 15),
-                ),
-              ]
-            : [
-                Text('Forgot your password?', style: Theme.of(context).textTheme.headlineMedium),
-                const SizedBox(height: 6),
-                Text("Enter your email and we'll send you a reset link.", style: TextStyle(color: p.muted, fontSize: 15)),
-                const SizedBox(height: 24),
-                ErrorBox(_error),
-                if (_error != null) const SizedBox(height: 14),
-                TextField(
-                  controller: _email,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Email'),
-                  onSubmitted: (_) => _submit(),
-                ),
-                const SizedBox(height: 20),
-                BusyButton(label: 'Send reset link', busy: _busy, onPressed: _submit),
-              ],
-      ),
     );
   }
 }

@@ -423,7 +423,7 @@ function SmtpSection({ data }: { data: AdminSettings }) {
     <SectionCard
       icon={<Mail className="size-6" />}
       title="Email (SMTP)"
-      description="Used for password resets and event invites. While it's not set up, emails are written to the server log instead."
+      description="Used for event invites. While it's not set up, emails are written to the server log instead."
       status={s["smtp.host"].set ? <Badge tone="ok">Configured</Badge> : <Badge tone="warn">Not set up</Badge>}
     >
       <form className="flex flex-col gap-4" onSubmit={submit} noValidate>

@@ -4,8 +4,7 @@ import { useAuth, type Status } from "@/lib/auth";
 import { Logo, Spinner } from "@/components/ui";
 import { AppShell } from "@/layouts/AppShell";
 import { AuthLayout } from "@/layouts/AuthLayout";
-import { LoginPage, SignupPage } from "@/pages/Auth";
-import { ForgotPasswordPage, ResetPasswordPage } from "@/pages/PasswordReset";
+import { LoginPage, ToLogin } from "@/pages/Auth";
 import { EventsPage } from "@/pages/Events";
 import { NewEventPage } from "@/pages/NewEvent";
 import { EventPage } from "@/pages/Event";
@@ -45,9 +44,9 @@ export function safeNext(value: string | null) {
 }
 
 /**
- * Sign-in pages bounce people who arrive already signed in. Someone who signs
- * in *here* is redirected by the page itself (e.g. sign-up → selfie step), so
- * only the first settled status decides.
+ * The sign-in page bounces people who arrive already signed in (e.g. coming
+ * back from the identity server to `/login?next=…`). Only the first settled
+ * status decides.
  */
 function GuestOnly({ children }: { children: ReactNode }) {
   const { status } = useAuth();
@@ -64,13 +63,11 @@ export function App() {
     <Routes>
       <Route element={<GuestOnly><AuthLayout /></GuestOnly>}>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       </Route>
-      {/* Reachable signed in or out: the link comes from an email. */}
-      <Route element={<AuthLayout />}>
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-      </Route>
+      {/* Sign-up and password pages are gone: sign-in is through the shared identity server. */}
+      <Route path="/signup" element={<ToLogin />} />
+      <Route path="/forgot-password" element={<ToLogin />} />
+      <Route path="/reset-password" element={<ToLogin />} />
 
       <Route element={<RequireAuth><AppShell /></RequireAuth>}>
         <Route index element={<EventsPage />} />

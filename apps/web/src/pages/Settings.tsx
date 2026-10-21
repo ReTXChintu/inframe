@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ChevronRight, LogOut, ShieldCheck, Trash2 } from "lucide-react";
@@ -8,7 +8,7 @@ import { plural, PROVIDER_LABEL, timeAgo } from "@/lib/format";
 import { errorMessage, useFeedback } from "@/components/feedback";
 import { AndroidAppCard } from "@/components/AndroidApp";
 import { connectGoogle, GoogleNotSetUp, MegaConnectModal, ProviderMark, useConnections } from "@/components/StoragePicker";
-import { Button, Card, Modal, PasswordField, Segmented, Spinner, TextField } from "@/components/ui";
+import { Button, Card, Modal, Segmented, Spinner, TextField } from "@/components/ui";
 
 function Section({ id, title, description, children }: { id?: string; title: string; description?: string; children: ReactNode }) {
   return (
@@ -61,11 +61,10 @@ export function SettingsPage() {
         </Link>
       )}
       <AndroidAppCard />
-      {/* Two columns on wide screens: account basics left, storage + security right. */}
+      {/* Two columns on wide screens: profile and appearance left, storage and account right. */}
       <div className="grid items-start gap-5 xl:grid-cols-2">
         <div className="flex flex-col gap-5">
           <ProfileSection />
-          <PasswordSection />
           <AppearanceSection />
         </div>
         <div className="flex flex-col gap-5">
@@ -196,59 +195,6 @@ function StorageSection() {
   );
 }
 
-function PasswordSection() {
-  const { adoptToken } = useAuth();
-  const { toast } = useFeedback();
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [confirmNext, setConfirmNext] = useState("");
-  const [fields, setFields] = useState<Record<string, string>>({});
-  const change = useMutation({
-    mutationFn: () => api<{ accessToken: string }>("/api/me/password", { body: { currentPassword: current, newPassword: next } }),
-    onSuccess: async ({ accessToken }) => {
-      await adoptToken(accessToken);
-      setCurrent("");
-      setNext("");
-      setConfirmNext("");
-      toast("Password changed. Other devices were signed out.");
-    },
-    onError: (err) => {
-      if (err instanceof ApiError && Object.keys(err.fields).length) {
-        setFields({ current: err.fields.currentPassword ?? "", next: err.fields.newPassword ?? "" });
-      } else toast(errorMessage(err), "error");
-    },
-  });
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    if (next !== confirmNext) return setFields({ confirm: "The passwords don't match." });
-    setFields({});
-    change.mutate();
-  };
-  return (
-    <Section title="Password">
-      <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
-        <PasswordField label="Current password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} error={fields.current || undefined} />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <PasswordField
-            label="New password"
-            autoComplete="new-password"
-            value={next}
-            onChange={(e) => setNext(e.target.value)}
-            error={fields.next || undefined}
-            hint="8+ characters, a letter and a number."
-          />
-          <PasswordField label="Confirm new password" autoComplete="new-password" value={confirmNext} onChange={(e) => setConfirmNext(e.target.value)} error={fields.confirm} />
-        </div>
-        <div className="flex justify-end">
-          <Button type="submit" disabled={!current || !next} loading={change.isPending}>
-            Change password
-          </Button>
-        </div>
-      </form>
-    </Section>
-  );
-}
-
 const THEME_KEY = "inframe:theme";
 type Theme = "system" | "light" | "dark";
 
@@ -294,18 +240,18 @@ function AccountSection() {
   const { signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [password, setPassword] = useState("");
+  const [confirmText, setConfirmText] = useState("");
   const [error, setError] = useState<string | undefined>();
   const del = useMutation({
-    mutationFn: () => api("/api/me", { method: "DELETE", body: { password } }),
+    mutationFn: () => api("/api/me", { method: "DELETE", body: { confirm: confirmText.trim() } }),
     onSuccess: async () => {
       await signOut();
       navigate("/login", { replace: true });
     },
-    onError: (err) => setError(err instanceof ApiError ? (err.fields.password ?? err.message) : errorMessage(err)),
+    onError: (err) => setError(err instanceof ApiError ? (err.fields.confirm ?? err.message) : errorMessage(err)),
   });
   return (
-    <Section title="Account">
+    <Section title="Account" description="You sign in with your account, the same one for InFrame, SpendLog and Trippin. Its password is managed there.">
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" icon={<LogOut className="size-4" />} onClick={() => signOut().then(() => navigate("/login"))}>
           Sign out
@@ -320,7 +266,7 @@ function AccountSection() {
         title="Delete your account?"
         size="sm"
         footer={
-          <Button variant="danger" disabled={!password} loading={del.isPending} onClick={() => del.mutate()}>
+          <Button variant="danger" disabled={confirmText.trim() !== "DELETE"} loading={del.isPending} onClick={() => del.mutate()}>
             Delete forever
           </Button>
         }
@@ -328,9 +274,17 @@ function AccountSection() {
         <div className="flex flex-col gap-4">
           <p className="text-[14px] text-muted">
             Your selfies, family members and storage connections are deleted, and events you own are removed for everyone. Photo
-            files in your Drive/MEGA stay where they are.
+            files in your Drive/MEGA stay where they are. Your sign-in account itself stays, for SpendLog and Trippin.
           </p>
-          <PasswordField label="Your password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} error={error} />
+          <TextField
+            label="Type DELETE to confirm"
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            error={error}
+          />
         </div>
       </Modal>
     </Section>

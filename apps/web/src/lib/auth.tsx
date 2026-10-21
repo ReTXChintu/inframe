@@ -9,10 +9,12 @@ interface AuthValue {
   status: Status;
   me: Me | undefined;
   user: User | undefined;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (name: string, email: string, password: string) => Promise<void>;
-  /** Use a token obtained elsewhere (password reset, password change). */
-  adoptToken: (token: string) => Promise<void>;
+  /**
+   * Ends the InFrame session, then sends the browser to the identity server
+   * to end that session too (it comes back to /login). Signing in happens
+   * entirely on the server (/api/auth/oidc/start → callback), which leaves a
+   * refresh cookie this provider picks up on load.
+   */
   signOut: () => Promise<void>;
 }
 
@@ -40,41 +42,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshToken().then((token) => setStatus(token ? "signed-in" : "signed-out"));
   }, [clear]);
 
-  const adoptToken = useCallback(
-    async (token: string) => {
-      setToken(token);
-      setStatus("signed-in");
-      await qc.invalidateQueries({ queryKey: ["me"] });
-    },
-    [qc],
-  );
-
-  const signIn = useCallback(
-    async (email: string, password: string) => {
-      const res = await api<{ accessToken: string }>("/api/auth/login", { body: { email, password } });
-      qc.clear();
-      await adoptToken(res.accessToken);
-    },
-    [adoptToken, qc],
-  );
-
-  const signUp = useCallback(
-    async (name: string, email: string, password: string) => {
-      const res = await api<{ accessToken: string }>("/api/auth/signup", { body: { name, email, password } });
-      qc.clear();
-      await adoptToken(res.accessToken);
-    },
-    [adoptToken, qc],
-  );
-
   const signOut = useCallback(async () => {
-    await api("/api/auth/logout", { method: "POST" }).catch(() => {});
+    const res = await api<{ endSessionUrl?: string | null }>("/api/auth/logout", { method: "POST" }).catch(() => null);
     clear();
+    if (res?.endSessionUrl) window.location.assign(res.endSessionUrl);
   }, [clear]);
 
   const value = useMemo<AuthValue>(
-    () => ({ status, me: meQuery.data, user: meQuery.data?.user, signIn, signUp, adoptToken, signOut }),
-    [status, meQuery.data, signIn, signUp, adoptToken, signOut],
+    () => ({ status, me: meQuery.data, user: meQuery.data?.user, signOut }),
+    [status, meQuery.data, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

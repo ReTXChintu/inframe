@@ -7,7 +7,8 @@ import { z } from "zod";
 const here = path.dirname(fileURLToPath(import.meta.url));
 // apps/server/src (or dist) → repo root
 export const repoRoot = path.resolve(here, "../../..");
-dotenv.config({ path: path.join(repoRoot, ".env"), quiet: true });
+// Tests configure everything through process.env and must not pick up a developer's .env.
+if (process.env.NODE_ENV !== "test") dotenv.config({ path: path.join(repoRoot, ".env"), quiet: true });
 
 const bool = z
   .string()
@@ -26,6 +27,19 @@ const schema = z.object({
   MEDIA_CACHE_MB: z.coerce.number().int().min(0).default(256),
   /** Development only: an in-memory fake storage account for trying InFrame without Drive/MEGA. */
   DEV_MEMORY_STORAGE: bool,
+
+  // Sign-in: the OpenID Connect identity server shared with SpendLog and Trippin.
+  // InFrame has no passwords of its own; the identity server proves who someone is.
+  OIDC_ISSUER: z.string().url().optional(),
+  /** The web app's (confidential) client. */
+  OIDC_CLIENT_ID: z.string().default("inframe-web"),
+  OIDC_CLIENT_SECRET: z.string().optional(),
+  /** Default: <APP_URL>/api/auth/oidc/callback */
+  OIDC_REDIRECT_URI: z.string().url().optional(),
+  /** Where the identity server sends people after signing out. Default: <APP_URL>/login */
+  OIDC_POST_LOGOUT_URI: z.string().url().optional(),
+  /** The Android app's (public, PKCE) client: its ID tokens carry this audience. */
+  OIDC_MOBILE_CLIENT_ID: z.string().default("inframe-mobile"),
 
   // Model, Google and SMTP values are optional here: the super admin can set
   // (and override) all of them in Admin → Settings.
@@ -78,15 +92,25 @@ if (isProd && env.DEV_MEMORY_STORAGE) {
   process.exit(1);
 }
 
+const appUrl = env.APP_URL.replace(/\/$/, "");
+
 export const config = {
   ...env,
   isProd,
+  oidc: {
+    issuer: env.OIDC_ISSUER ?? null,
+    clientId: env.OIDC_CLIENT_ID,
+    clientSecret: env.OIDC_CLIENT_SECRET ?? null,
+    redirectUri: env.OIDC_REDIRECT_URI ?? `${appUrl}/api/auth/oidc/callback`,
+    postLogoutUri: env.OIDC_POST_LOGOUT_URI ?? `${appUrl}/login`,
+    mobileClientId: env.OIDC_MOBILE_CLIENT_ID,
+  },
   /** Served over HTTPS? Decides the Secure cookie flag (plain http://IP:port hosting must not set it). */
   httpsApp: env.APP_URL.startsWith("https://"),
   devMemoryStorage: env.DEV_MEMORY_STORAGE && !isProd,
   // Memory storage lives in one process, so its workers must run inside the API.
   runWorkersInApi: env.RUN_WORKERS_IN_API || (env.DEV_MEMORY_STORAGE && !isProd),
-  appUrl: env.APP_URL.replace(/\/$/, ""),
+  appUrl,
   maxUploadBytes: env.MAX_UPLOAD_MB * 1024 * 1024,
   maxVideoBytes: env.MAX_VIDEO_MB * 1024 * 1024,
   spoolDir: env.SPOOL_DIR ? path.resolve(repoRoot, env.SPOOL_DIR) : path.join(os.tmpdir(), "inframe-spool"),

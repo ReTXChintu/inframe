@@ -31,6 +31,9 @@ android {
         // From pubspec / --build-name and --build-number (CI sets them from the release tag + run number).
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Sign-in (flutter_appauth): the identity server redirects back to
+        // app.inframe.android:/oauth2redirect. Lowercase, and the same as applicationId.
+        manifestPlaceholders.putAll(mapOf("appAuthRedirectScheme" to "app.inframe.android"))
     }
 
     signingConfigs {

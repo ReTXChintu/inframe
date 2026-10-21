@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../config.dart';
@@ -31,12 +32,13 @@ class Api {
   static const _storage = FlutterSecureStorage();
   static const _refreshKey = 'inframe.refresh';
   static const _serverKey = 'inframe.server';
+  static const _idTokenKey = 'inframe.idToken';
 
   String baseUrl = defaultServerUrl;
   String? _accessToken;
   Future<bool>? _refreshing;
 
-  /// Called when the session can't be refreshed any more (signed out elsewhere, password changed…).
+  /// Called when the session can't be refreshed any more (signed out elsewhere, account deleted…).
   void Function()? onSignedOut;
 
   late final Dio _dio = Dio(
@@ -47,6 +49,10 @@ class Api {
       validateStatus: (_) => true,
     ),
   );
+
+  /// Tests answer requests themselves instead of reaching a server.
+  @visibleForTesting
+  set httpClientAdapter(HttpClientAdapter adapter) => _dio.httpClientAdapter = adapter;
 
   Future<void> load() async {
     baseUrl = normalizeServerUrl(await _storage.read(key: _serverKey) ?? defaultServerUrl);
@@ -71,7 +77,13 @@ class Api {
   Future<void> clearSession() async {
     _accessToken = null;
     await _storage.delete(key: _refreshKey);
+    await _storage.delete(key: _idTokenKey);
   }
+
+  /// The identity server's ID token from the last sign-in: the hint for ending its session on sign-out.
+  Future<String?> get idTokenHint => _storage.read(key: _idTokenKey);
+
+  Future<void> saveIdTokenHint(String idToken) => _storage.write(key: _idTokenKey, value: idToken);
 
   /// Swap the stored refresh token for a fresh pair. Concurrent callers share one attempt.
   Future<bool> refresh() {
@@ -97,7 +109,7 @@ class Api {
     }();
   }
 
-  /// Use tokens from a sign-in style response (login, signup, password change).
+  /// Use tokens from a sign-in response (`/api/auth/oidc/mobile`).
   Future<void> adopt(Map<String, dynamic> body) => _saveTokens(body);
 
   Future<T> get<T>(String path, {Map<String, dynamic>? query}) => _send<T>('GET', path, query: query);

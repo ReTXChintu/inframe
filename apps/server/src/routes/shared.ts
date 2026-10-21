@@ -6,11 +6,6 @@ export const idParam = z.object({ id: z.string().uuid("Not a valid id.") });
 export const parseId = (params: unknown) => parse(idParam, params).id;
 
 export const email = z.string().trim().toLowerCase().email("Enter a valid email address.").max(254);
-export const password = z
-  .string()
-  .min(8, "Use at least 8 characters.")
-  .max(128, "Use at most 128 characters.")
-  .refine((p) => /[A-Za-z]/.test(p) && /\d/.test(p), "Use at least one letter and one number.");
 export const personName = z.string().trim().min(1, "Enter a name.").max(80);
 
 export interface PersonRow {
