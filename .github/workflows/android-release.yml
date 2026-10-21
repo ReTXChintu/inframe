@@ -170,6 +170,11 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # The runner's route to the VPS is sometimes slow to answer, and
+          # one connect timeout lost a release. Retry the connection itself
+          # (not the deploy, which reads the APK from stdin once).
+          printf 'Host *\n  ConnectTimeout 30\n  ConnectionAttempts 6\n  ServerAliveInterval 20\n  ServerAliveCountMax 6\n' > ~/.ssh/config
+          chmod 600 ~/.ssh/config
 
       - name: Upload APK, pull, rebuild, restart
         env:
