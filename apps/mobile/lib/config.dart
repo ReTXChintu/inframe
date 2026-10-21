@@ -3,7 +3,7 @@
 /// People can still point the app at another server from the sign-in screen.
 const String defaultServerUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'http://187.127.179.114:50010',
+  defaultValue: 'https://in-frame.duckdns.org:50010',
 );
 
 /// The OpenID Connect identity server shared by InFrame, SpendLog and Trippin.

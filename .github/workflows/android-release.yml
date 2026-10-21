@@ -52,8 +52,10 @@ jobs:
       build: ${{ steps.version.outputs.code }}
     env:
       HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
-      API_BASE_URL: ${{ vars.API_BASE_URL || 'http://187.127.179.114:50010' }}
-      OIDC_ISSUER: ${{ vars.OIDC_ISSUER }}
+      # HTTPS on in-frame.duckdns.org since the move to one sign-in; the old
+      # API_BASE_URL variable may still say plain http, so it isn't read.
+      API_BASE_URL: https://in-frame.duckdns.org:50010
+      OIDC_ISSUER: ${{ vars.OIDC_ISSUER || 'https://pass-port.duckdns.org:50011' }}
     steps:
       - uses: actions/checkout@v4
 
