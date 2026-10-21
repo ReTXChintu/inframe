@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../api/api.dart';
-import '../api/models.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/storage.dart';
@@ -17,13 +16,10 @@ class NewEventScreen extends StatefulWidget {
 
 class _NewEventScreenState extends State<NewEventScreen> {
   final _name = TextEditingController();
-  final _folder = TextEditingController();
   String _kind = 'trip';
   DateTime? _starts;
   DateTime? _ends;
-  List<Connection>? _connections;
-  String? _connectionId;
-  bool _existingFolder = false;
+  StorageChoice _storage = const StorageChoice();
   bool _busy = false;
   String? _error;
   Map<String, String> _fields = {};
@@ -34,24 +30,6 @@ class _NewEventScreenState extends State<NewEventScreen> {
     ('party', 'Party', Icons.celebration_outlined),
     ('other', 'Other', Icons.auto_awesome_outlined),
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadConnections();
-  }
-
-  Future<void> _loadConnections() async {
-    try {
-      final list = await loadConnections();
-      setState(() {
-        _connections = list;
-        _connectionId ??= list.where((c) => !c.broken && c.provider != 'gdrive').firstOrNull?.id ?? list.firstOrNull?.id;
-      });
-    } on ApiException catch (e) {
-      setState(() => _error = e.message);
-    }
-  }
 
   Future<void> _pickDate(bool start) async {
     final now = DateTime.now();
@@ -86,7 +64,7 @@ class _NewEventScreenState extends State<NewEventScreen> {
         'kind': _kind,
         'startsOn': _iso(_starts),
         'endsOn': _iso(_ends),
-        'storage': {'connectionId': _connectionId, 'folder': _existingFolder ? _folder.text.trim() : null},
+        'storage': _storage.toJson(),
       });
       if (mounted) Navigator.pop(context, (res['event'] as Map)['id'] as String);
     } on ApiException catch (e) {
@@ -99,9 +77,7 @@ class _NewEventScreenState extends State<NewEventScreen> {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    final connections = _connections;
-    final selected = connections?.where((c) => c.id == _connectionId).firstOrNull;
-    final canCreate = _name.text.trim().isNotEmpty && _connectionId != null && (!_existingFolder || _folder.text.trim().isNotEmpty);
+    final canCreate = _name.text.trim().isNotEmpty && _storage.ready;
     final dateFmt = DateFormat('d MMM yyyy');
 
     return Scaffold(
@@ -154,73 +130,7 @@ class _NewEventScreenState extends State<NewEventScreen> {
           SectionCard(
             title: 'Where photos are stored',
             subtitle: 'Photos go into your Google Drive or MEGA folder, with thumbnails in a hidden “.inframe” sub-folder.',
-            child: connections == null
-                ? const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
-                : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    RadioGroup<String>(
-                      groupValue: _connectionId,
-                      onChanged: (v) => setState(() => _connectionId = v),
-                      child: Column(children: [
-                        for (final c in connections)
-                          RadioListTile<String>(
-                            value: c.id,
-                            enabled: !c.broken,
-                            contentPadding: EdgeInsets.zero,
-                            secondary: Icon(providerIcon(c.provider)),
-                            title: Text(c.providerLabel),
-                            subtitle: Text(c.broken ? 'Needs reconnecting' : c.accountLabel, overflow: TextOverflow.ellipsis),
-                          ),
-                      ]),
-                    ),
-                    if (connections.isEmpty)
-                      Text('Connect a storage account to keep this event\'s photos in your own storage.', style: TextStyle(color: p.muted)),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.cloud_outlined),
-                        label: const Text('Connect MEGA'),
-                        onPressed: () async {
-                          final c = await connectMega(context);
-                          if (c != null) {
-                            _connectionId = c.id;
-                            _loadConnections();
-                          }
-                        },
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text('Google Drive is connected from the website (Settings → Storage).', style: TextStyle(color: p.muted, fontSize: 12)),
-                    ),
-                    if (selected != null) ...[
-                      const Divider(height: 28),
-                      SegmentedButton<bool>(
-                        segments: const [
-                          ButtonSegment(value: false, icon: Icon(Icons.create_new_folder_outlined), label: Text('New folder')),
-                          ButtonSegment(value: true, icon: Icon(Icons.folder_open_outlined), label: Text('Existing')),
-                        ],
-                        selected: {_existingFolder},
-                        onSelectionChanged: (s) => setState(() => _existingFolder = s.first),
-                      ),
-                      const SizedBox(height: 12),
-                      if (_existingFolder)
-                        TextField(
-                          controller: _folder,
-                          keyboardType: TextInputType.url,
-                          onChanged: (_) => setState(() {}),
-                          decoration: InputDecoration(
-                            labelText: selected.provider == 'gdrive' ? 'Google Drive folder link' : 'MEGA folder link or path',
-                            hintText: selected.provider == 'gdrive' ? 'https://drive.google.com/drive/folders/…' : 'https://mega.nz/folder/… or Trips/Goa',
-                            helperText: 'Photos already in it are added too. Sub-folders become albums.',
-                            helperMaxLines: 2,
-                          ),
-                        )
-                      else
-                        Text('InFrame creates “InFrame · ${_name.text.trim().isEmpty ? 'event name' : _name.text.trim()}” in your storage.',
-                            style: TextStyle(color: p.muted)),
-                    ],
-                  ]),
+            child: StoragePicker(newFolderName: _name.text, onChanged: (c) => setState(() => _storage = c)),
           ),
           const SizedBox(height: 20),
           BusyButton(label: 'Create event', busy: _busy, onPressed: canCreate ? _create : null),

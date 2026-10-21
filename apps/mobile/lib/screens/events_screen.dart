@@ -223,6 +223,10 @@ class _EventCard extends StatelessWidget {
                 if (range != null) _Meta(icon: Icons.calendar_today_outlined, text: range),
                 _Meta(icon: Icons.photo_outlined, text: plural(event.photoCount, 'photo')),
                 _Meta(icon: Icons.people_outline, text: '${event.memberCount}'),
+                if (event.external case final link? when link.isTrippin && link.linked)
+                  const _Meta(icon: Icons.luggage_outlined, text: 'Trippin'),
+                if (event.storagePending && event.role == 'owner')
+                  _Meta(icon: Icons.create_new_folder_outlined, text: 'Connect a folder', color: p.warn),
               ]),
             ]),
           ),
@@ -233,17 +237,18 @@ class _EventCard extends StatelessWidget {
 }
 
 class _Meta extends StatelessWidget {
-  const _Meta({required this.icon, required this.text});
+  const _Meta({required this.icon, required this.text, this.color});
   final IconData icon;
   final String text;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final c = color ?? Palette.of(context).muted;
     return Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 14, color: p.muted),
+      Icon(icon, size: 14, color: c),
       const SizedBox(width: 4),
-      Text(text, style: TextStyle(color: p.muted, fontSize: 13)),
+      Text(text, style: TextStyle(color: c, fontSize: 13)),
     ]);
   }
 }

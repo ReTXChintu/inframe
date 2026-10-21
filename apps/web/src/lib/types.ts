@@ -50,6 +50,13 @@ export type EventKind = "trip" | "wedding" | "party" | "other";
 export type Role = "owner" | "cohost" | "member";
 export type ProviderName = "gdrive" | "mega" | "memory";
 
+/** Another app of the suite that created and steers the event (Trippin). `linked: false` once it was unlinked. */
+export interface ExternalLink {
+  source: "trippin";
+  url: string | null;
+  linked: boolean;
+}
+
 export interface EventSummary {
   id: string;
   name: string;
@@ -63,6 +70,9 @@ export interface EventSummary {
   myCount: number;
   coverUrl: string | null;
   provider: ProviderName | null;
+  /** No storage folder picked yet: nothing can be added until the owner connects one. */
+  storagePending: boolean;
+  external: ExternalLink | null;
 }
 
 export interface Folder {
@@ -87,8 +97,11 @@ export interface EventDetail {
   joinCode: string | null;
   coverPhotoId: string | null;
   coverUrl: string | null;
+  external: ExternalLink | null;
   storage: {
     connected: boolean;
+    /** No folder picked yet (Trippin-created events start this way). */
+    pending: boolean;
     provider: ProviderName | null;
     folderName: string | null;
     accountLabel: string | null;

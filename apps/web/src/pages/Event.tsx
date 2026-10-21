@@ -28,6 +28,7 @@ import { GridSkeleton, PhotoGrid, usePhotoFeed } from "@/components/PhotoGrid";
 import { SelectionBar } from "@/components/SelectionBar";
 import { SelfieModal } from "@/components/SelfieCapture";
 import { ShareSheet } from "@/components/ShareSheet";
+import { StoragePendingBanner, storagePendingMessage, TrippinChip } from "@/components/Trippin";
 import { Button, cx, EmptyState, IconButton, Modal, Segmented, TextField, LinkButton } from "@/components/ui";
 import { LoadingBlock } from "./Events";
 
@@ -161,6 +162,7 @@ export function EventPage() {
   return (
     <div className="flex flex-col gap-6">
       <EventHeader event={event} onShare={() => setShareOpen(true)} />
+      <StoragePendingBanner event={event} />
 
       {event.can.faceSearch && (
         !self?.hasSelfie ? (
@@ -315,6 +317,7 @@ function EventHeader({ event, onShare }: { event: EventDetail; onShare: () => vo
             <span className="inline-flex items-center gap-1.5">
               <Users className="size-3.5" /> {plural(event.counts.members, "member")}
             </span>
+            <TrippinChip link={event.external} />
           </div>
           <h1 className="mt-1 text-3xl font-semibold break-words sm:text-4xl">{event.name}</h1>
         </div>
@@ -333,7 +336,7 @@ function EventHeader({ event, onShare }: { event: EventDetail; onShare: () => vo
         </div>
       </div>
 
-      {event.isHost && (s.status === "error" || s.syncState === "error" || !s.connected || (event.counts.failed ?? 0) > 0 || (event.counts.processing ?? 0) > 0 || s.syncState === "syncing") && (
+      {event.isHost && (s.status === "error" || s.syncState === "error" || (!s.connected && !s.pending) || (event.counts.failed ?? 0) > 0 || (event.counts.processing ?? 0) > 0 || s.syncState === "syncing") && (
         <HostStatus event={event} />
       )}
     </div>
@@ -354,7 +357,9 @@ function HostStatus({ event }: { event: EventDetail }) {
   });
 
   const items: React.ReactNode[] = [];
-  if (!s.connected) {
+  if (s.pending) {
+    // The banner above the photos asks the owner to connect a folder.
+  } else if (!s.connected) {
     items.push(
       <span key="nc" className="inline-flex items-center gap-1.5 text-warn">
         <AlertTriangle className="size-4" /> No storage folder connected — uploads are off.{" "}
@@ -429,7 +434,13 @@ function EmptyForView({ view, event, onSelfie }: { view: View; event: EventDetai
         <EmptyState
           icon={<Images className="size-8" />}
           title="No photos yet"
-          body={event.storage.syncState === "syncing" ? "Bringing in photos from the storage folder…" : "Be the first to add some."}
+          body={
+            event.storage.pending
+              ? storagePendingMessage(event.isOwner)
+              : event.storage.syncState === "syncing"
+                ? "Bringing in photos from the storage folder…"
+                : "Be the first to add some."
+          }
           action={upload}
         />
       );

@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { formatRange, KIND_LABEL, plural, ROLE_LABEL } from "@/lib/format";
 import type { EventSummary, MyInvite } from "@/lib/types";
 import { errorMessage, useFeedback } from "@/components/feedback";
+import { TrippinChip } from "@/components/Trippin";
 import { Badge, Button, Card, EmptyState, Spinner, LinkButton } from "@/components/ui";
 
 export function EventsPage() {
@@ -106,7 +107,9 @@ function EventCard({ event: e, index }: { event: EventSummary; index: number }) 
           <span className="inline-flex items-center gap-1.5">
             <Users className="size-3.5" /> {e.memberCount}
           </span>
+          {e.storagePending && e.role === "owner" && <span className="font-medium text-warn">Connect a folder</span>}
         </div>
+        {e.external && <TrippinChip link={e.external} plain className="self-start" />}
       </div>
     </Link>
   );

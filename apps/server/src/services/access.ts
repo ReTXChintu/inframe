@@ -1,5 +1,5 @@
 import { one } from "../db/pool.js";
-import { forbidden, notFound } from "../lib/errors.js";
+import { AppError, forbidden, notFound } from "../lib/errors.js";
 
 export type Role = "owner" | "cohost" | "member";
 
@@ -23,6 +23,12 @@ export interface EventRow {
   sync_state: "idle" | "syncing" | "error";
   sync_error: string | null;
   last_synced_at: Date | null;
+  /** Set when another app of the suite (Trippin) created and steers this event. */
+  external_source: string | null;
+  external_id: string | null;
+  external_url: string | null;
+  /** false = it was linked once and has since been unlinked (it's a normal event now). */
+  external_linked: boolean | null;
   created_at: Date;
 }
 
@@ -62,6 +68,17 @@ export async function eventAccess(eventId: string, userId: string): Promise<Even
     canFaceSearch: isHost || event.face_search,
   };
 }
+
+/**
+ * The event has no storage folder yet (Trippin-created events start that way),
+ * so nothing can be added or synced until its owner picks one.
+ */
+export const storagePendingError = (isOwner: boolean) =>
+  new AppError(
+    409,
+    "storage_pending",
+    isOwner ? "Connect a folder to start adding photos." : "Photos will appear once the owner connects a folder.",
+  );
 
 export async function hostAccess(eventId: string, userId: string) {
   const access = await eventAccess(eventId, userId);

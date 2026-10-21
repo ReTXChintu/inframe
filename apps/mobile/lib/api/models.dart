@@ -40,6 +40,20 @@ class Me {
   int get pendingInvites => _i(j['pendingInvites']);
 }
 
+/// Where an event is planned, when another app of the suite created it
+/// (today: a Trippin trip). `linked` turns false once the trip stops sharing
+/// photos here; the event and its photos stay.
+class ExternalLink {
+  ExternalLink(this.j);
+  final Map<String, dynamic> j;
+  String get source => _s(j['source']) ?? '';
+  String? get url => _s(j['url']);
+  bool get linked => _b(j['linked']);
+  bool get isTrippin => source == 'trippin';
+
+  static ExternalLink? from(dynamic v) => v is Map ? ExternalLink(_m(v)) : null;
+}
+
 const kindLabels = {'trip': 'Trip', 'wedding': 'Wedding', 'party': 'Party', 'other': 'Event'};
 const roleLabels = {'owner': 'Owner', 'cohost': 'Co-host', 'member': 'Guest'};
 
@@ -56,6 +70,9 @@ class EventSummary {
   int get memberCount => _i(j['memberCount']);
   int get myCount => _i(j['myCount']);
   String? get coverUrl => _s(j['coverUrl']);
+  ExternalLink? get external => ExternalLink.from(j['external']);
+  /// No storage folder picked yet (events created from Trippin start like this).
+  bool get storagePending => _b(j['storagePending']);
 }
 
 class Folder {
@@ -86,6 +103,9 @@ class EventDetail {
   String? get coverUrl => _s(j['coverUrl']);
   Map<String, dynamic> get storage => _m(j['storage']);
   bool get storageConnected => _b(storage['connected']);
+  /// No storage folder picked yet: uploads wait until the owner connects one.
+  bool get storagePending => _b(storage['pending']);
+  ExternalLink? get external => ExternalLink.from(j['external']);
   String? get storageProvider => _s(storage['provider']);
   String? get storageFolderName => _s(storage['folderName']);
   String get syncState => _s(storage['syncState']) ?? 'idle';

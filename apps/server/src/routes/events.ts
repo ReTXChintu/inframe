@@ -7,7 +7,15 @@ import { badRequest, conflict, notFound, parse } from "../lib/errors.js";
 import { photoUrl } from "../lib/media-urls.js";
 import { enqueueFaces, enqueueIngest, enqueueSync } from "../jobs/queue.js";
 import { toEvent } from "../realtime/io.js";
-import { eventAccess, hostAccess, ownerAccess, type EventAccess, type EventRow, type Role } from "../services/access.js";
+import {
+  eventAccess,
+  hostAccess,
+  ownerAccess,
+  storagePendingError,
+  type EventAccess,
+  type EventRow,
+  type Role,
+} from "../services/access.js";
 import { loadConnection } from "../storage/index.js";
 import { parseId, PERSON_COLUMNS, serializePerson, type PersonRow } from "./shared.js";
 import { ownConnection, pickFolder } from "./storage.js";
@@ -37,7 +45,7 @@ function checkDates(startsOn: string | null | undefined, endsOn: string | null |
   if (startsOn && endsOn && endsOn < startsOn) throw badRequest("The end date is before the start date.");
 }
 
-async function uniqueJoinCode(): Promise<string> {
+export async function uniqueJoinCode(): Promise<string> {
   for (let i = 0; i < 5; i++) {
     const code = joinCode();
     if (!(await one("SELECT 1 FROM events WHERE join_code = $1", [code]))) return code;
@@ -46,6 +54,13 @@ async function uniqueJoinCode(): Promise<string> {
 }
 
 const coverUrl = (photoId: string | null) => (photoId ? photoUrl(photoId, "thumb") : null);
+
+/** The app (Trippin) this event is linked to, if any — `linked: false` once it was unlinked. */
+const externalLink = (e: Pick<EventRow, "external_source" | "external_url" | "external_linked">) =>
+  e.external_source ? { source: e.external_source, url: e.external_url, linked: e.external_linked === true } : null;
+
+/** No storage folder picked yet (an event Trippin created starts like this): nothing can be added until the owner picks one. */
+const storagePending = (e: Pick<EventRow, "storage_folder_id">) => !e.storage_folder_id;
 
 interface Counts {
   all: number;
@@ -119,7 +134,11 @@ async function eventDetail(access: EventAccess, userId: string) {
     role: access.role,
     isHost: access.isHost,
     isOwner: access.isOwner,
-    can: { viewAll: access.canViewAll, upload: access.canUpload && Boolean(storage), faceSearch: access.canFaceSearch },
+    can: {
+      viewAll: access.canViewAll,
+      upload: access.canUpload && Boolean(storage && e.storage_folder_id),
+      faceSearch: access.canFaceSearch,
+    },
     settings: {
       joinEnabled: e.join_enabled,
       guestUploads: e.guest_uploads,
@@ -129,8 +148,10 @@ async function eventDetail(access: EventAccess, userId: string) {
     joinCode: access.isHost || e.join_enabled ? e.join_code : null,
     coverPhotoId: e.cover_photo_id,
     coverUrl: coverUrl(e.cover_photo_id ?? autoCover),
+    external: externalLink(e),
     storage: {
       connected: Boolean(storage && e.storage_folder_id),
+      pending: storagePending(e),
       provider: storage?.provider ?? null,
       folderName: e.storage_folder_name,
       // Account and link details are for hosts only.
@@ -199,6 +220,8 @@ export async function eventRoutes(app: FastifyInstance) {
         myCount: e.my_count,
         coverUrl: coverUrl(e.cover_id),
         provider: e.provider,
+        storagePending: storagePending(e),
+        external: externalLink(e),
       })),
     };
   });
@@ -288,10 +311,11 @@ export async function eventRoutes(app: FastifyInstance) {
       folder: body.folder,
       createNamed: `InFrame · ${access.event.name}`,
     });
-    const sameFolder = folder.id === access.event.storage_folder_id;
+    // A pending event (no folder yet) has nothing to drop: albums made meanwhile carry over.
+    const replacing = Boolean(access.event.storage_folder_id) && folder.id !== access.event.storage_folder_id;
     let dropped = 0;
     await tx(async (db) => {
-      if (!sameFolder) {
+      if (replacing) {
         // The old folder (and its .inframe previews) stays untouched in storage.
         dropped = (await db.query("DELETE FROM photos WHERE event_id = $1", [id])).rowCount ?? 0;
         await db.query("DELETE FROM folders WHERE event_id = $1", [id]);
@@ -311,9 +335,7 @@ export async function eventRoutes(app: FastifyInstance) {
   app.post("/api/events/:id/sync", { config: { rateLimit: { max: 6, timeWindow: "1 minute" } } }, async (req) => {
     const id = parseId(req.params);
     const access = await hostAccess(id, req.user.id);
-    if (!access.event.storage_folder_id || !access.event.storage_connection_id) {
-      throw badRequest("Connect a storage folder first.");
-    }
+    if (!access.event.storage_folder_id || !access.event.storage_connection_id) throw storagePendingError(access.isOwner);
     const conn = await loadConnection(access.event.storage_connection_id);
     if (conn.status === "error") throw badRequest("The storage account needs reconnecting before it can sync.");
     await enqueueSync(id);

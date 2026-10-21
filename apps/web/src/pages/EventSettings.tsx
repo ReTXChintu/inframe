@@ -210,7 +210,8 @@ function StorageSection({ event }: { event: EventDetail }) {
   const qc = useQueryClient();
   const { toast, confirm } = useFeedback();
   const [params, setParams] = useSearchParams();
-  const [changing, setChanging] = useState(params.get("storage") !== null);
+  // ?connect=1: sent here from the event's "Connect a folder" call to action.
+  const [changing, setChanging] = useState(params.get("storage") !== null || params.get("connect") !== null);
   const [choice, setChoice] = useState<StorageChoice>(emptyStorageChoice);
 
   useEffect(() => {
@@ -293,7 +294,11 @@ function StorageSection({ event }: { event: EventDetail }) {
         </div>
       ) : (
         <div className="flex flex-col items-start gap-3">
-          <p className="text-[15px] text-warn">No storage folder connected — nobody can add photos until one is set.</p>
+          <p className="text-[15px] text-warn">
+            {s.pending
+              ? "No folder yet. Connect one to start adding photos."
+              : "No storage folder connected — nobody can add photos until one is set."}
+          </p>
           {event.isOwner ? (
             <Button onClick={() => setChanging(true)}>Connect a folder</Button>
           ) : (

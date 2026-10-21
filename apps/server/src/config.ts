@@ -48,6 +48,12 @@ const schema = z.object({
   /** The Android app's (public, PKCE) client: its ID tokens carry this audience. */
   OIDC_MOBILE_CLIENT_ID: z.string().default("inframe-mobile"),
 
+  /**
+   * Shared with Trippin: signs the calls it makes to /api/integrations/trippin
+   * (HMAC-SHA256). Unset = the integration is off and those routes refuse everything.
+   */
+  TRIPPIN_SUITE_SECRET: z.string().min(16, "TRIPPIN_SUITE_SECRET must be at least 16 characters").optional(),
+
   // Model, Google and SMTP values are optional here: the super admin can set
   // (and override) all of them in Admin → Settings.
   MODEL_URL: z.string().url().optional(),
@@ -112,6 +118,7 @@ export const config = {
     postLogoutUri: env.OIDC_POST_LOGOUT_URI ?? `${appUrl}/login`,
     mobileClientId: env.OIDC_MOBILE_CLIENT_ID,
   },
+  trippinSecret: env.TRIPPIN_SUITE_SECRET ?? null,
   /** Served over HTTPS? Decides the Secure cookie flag (plain http://IP:port hosting must not set it). */
   httpsApp: env.APP_URL.startsWith("https://"),
   devMemoryStorage: env.DEV_MEMORY_STORAGE && !isProd,

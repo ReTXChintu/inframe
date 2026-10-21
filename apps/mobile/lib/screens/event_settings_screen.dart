@@ -130,8 +130,12 @@ class _EventSettingsScreenState extends State<EventSettingsScreen> {
                 _Line('Dates', formatRange(event.startsOn, event.endsOn) ?? '—'),
                 _Line('Hosted by', event.ownerName),
                 _Line('Your role', roleLabels[event.role] ?? event.role),
-                if (event.storageProvider != null)
-                  _Line('Storage', '${event.storageFolderName ?? 'Folder'} · ${const {'gdrive': 'Google Drive', 'mega': 'MEGA', 'memory': 'Dev memory'}[event.storageProvider] ?? ''}'),
+                if (event.external case final link? when link.isTrippin)
+                  _Line('Trip', link.linked ? 'Planned in Trippin' : 'Was linked to Trippin'),
+                if (event.storagePending)
+                  _Line('Storage', event.isOwner ? 'No folder yet. Connect one from the event page.' : 'No folder yet')
+                else if (event.storageProvider != null)
+                  _Line('Storage','${event.storageFolderName ?? 'Folder'} · ${const {'gdrive': 'Google Drive', 'mega': 'MEGA', 'memory': 'Dev memory'}[event.storageProvider] ?? ''}'),
               ]),
             ),
             if (event.isHost) ...[

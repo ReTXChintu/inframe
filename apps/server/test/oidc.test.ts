@@ -344,8 +344,8 @@ describe("a session from the identity server works everywhere", () => {
       url: `/api/events/${eventId}/photos`,
       headers: { "x-upload-ticket": issued.json().ticket },
     });
-    assert.equal(upload.statusCode, 400);
-    assert.match(upload.json().message, /no storage folder/);
+    assert.equal(upload.statusCode, 409);
+    assert.match(upload.json().message, /Connect a folder/);
     const forged = await app.inject({
       method: "POST",
       url: `/api/events/${eventId}/photos`,

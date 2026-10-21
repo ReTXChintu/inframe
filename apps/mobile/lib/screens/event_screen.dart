@@ -8,6 +8,8 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/photos.dart';
 import '../widgets/selfie.dart';
+import '../widgets/trippin.dart';
+import 'connect_storage_screen.dart';
 import 'event_settings_screen.dart';
 import 'share_sheet.dart';
 import 'upload_screen.dart';
@@ -187,7 +189,7 @@ class _EventScreenState extends State<EventScreen> {
                   ),
               ],
             ),
-      floatingActionButton: event.canUpload && _selected.isEmpty
+      floatingActionButton: event.canUpload && !event.storagePending && _selected.isEmpty
           ? FloatingActionButton.extended(
               backgroundColor: p.ink,
               foregroundColor: p.bg,
@@ -212,7 +214,23 @@ class _EventScreenState extends State<EventScreen> {
                       .join('  ·  '),
                   style: TextStyle(color: p.muted, fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 0.4),
                 ),
-                if (event.isHost && !event.storageConnected) ...[
+                if (event.external case final link? when link.isTrippin) ...[
+                  const SizedBox(height: 10),
+                  TrippinChip(link),
+                ],
+                if (event.storagePending) ...[
+                  const SizedBox(height: 14),
+                  StoragePendingBanner(
+                    isOwner: event.isOwner,
+                    onConnect: () async {
+                      final connected = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(builder: (_) => ConnectStorageScreen(event: event)),
+                      );
+                      if (connected == true) _refresh();
+                    },
+                  ),
+                ] else if (event.isHost && !event.storageConnected) ...[
                   const SizedBox(height: 10),
                   Pill('No storage folder connected — uploads are off', tone: PillTone.warn, icon: Icons.warning_amber),
                 ],
@@ -297,6 +315,9 @@ class _EventScreenState extends State<EventScreen> {
                       body: switch (_view.kind) {
                         'me' => 'As soon as someone adds a photo you\'re in, it shows up here.',
                         'favorites' => 'Tap the heart on a photo to keep it here.',
+                        _ when event.storagePending => event.isOwner
+                            ? 'Connect a folder to start adding photos.'
+                            : 'Photos will appear once the owner connects a folder.',
                         _ => event.canUpload ? 'Be the first to add some.' : null,
                       },
                     ),

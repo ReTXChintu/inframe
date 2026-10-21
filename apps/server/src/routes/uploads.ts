@@ -11,7 +11,7 @@ import { AppError, badRequest, forbidden, parse, unauthorized } from "../lib/err
 import { mediaTypeOf, mimeFor } from "../lib/images.js";
 import { ensureSpool, newSpoolPath, removeSpool } from "../lib/spool.js";
 import { enqueueIngest } from "../jobs/queue.js";
-import { eventAccess } from "../services/access.js";
+import { eventAccess, storagePendingError } from "../services/access.js";
 import { serializePhoto, type PhotoRow } from "../services/photos.js";
 import { parseId } from "./shared.js";
 
@@ -121,9 +121,8 @@ export async function uploadRoutes(app: FastifyInstance) {
     const user = await uploader(req, eventId);
     const access = await eventAccess(eventId, user.id);
     if (!access.canUpload) throw forbidden("Only the hosts can add photos to this event.");
-    if (!access.event.storage_folder_id || !access.event.storage_connection_id) {
-      throw badRequest("This event has no storage folder connected yet.");
-    }
+    // Refused before a single byte is read: there's nowhere to put it yet.
+    if (!access.event.storage_folder_id || !access.event.storage_connection_id) throw storagePendingError(access.isOwner);
     const q = parse(
       z.object({ folderId: z.string().uuid().optional(), modifiedAt: z.string().max(40).optional() }),
       req.query,

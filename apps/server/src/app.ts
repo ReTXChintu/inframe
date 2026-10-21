@@ -17,6 +17,7 @@ import { meRoutes } from "./routes/me.js";
 import { memberRoutes } from "./routes/members.js";
 import { photoRoutes } from "./routes/photos.js";
 import { storageRoutes } from "./routes/storage.js";
+import { trippinRoutes } from "./routes/trippin.js";
 import { uploadRoutes } from "./routes/uploads.js";
 
 /**
@@ -84,6 +85,8 @@ export async function buildApp(opts: { logger?: FastifyServerOptions["logger"] }
   await app.register(uploadRoutes);
   await app.register(mediaRoutes);
   await app.register(adminRoutes);
+  // Server-to-server (Trippin): signed requests, no user session.
+  await app.register(trippinRoutes);
 
   // Production: serve the built web app, with SPA fallback for client routes.
   if (fs.existsSync(config.webDist)) {
