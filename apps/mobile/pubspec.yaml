@@ -10,6 +10,8 @@ dependencies:
   background_downloader: ^9.6.4
   cached_network_image: ^4.0.4
   dio: ^5.11.1
+  firebase_core: ^4.15.0
+  firebase_messaging: ^16.7.0
   flutter:
     sdk: flutter
   flutter_appauth: ^12.1.0

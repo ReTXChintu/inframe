@@ -1,6 +1,7 @@
 // Event links into InFrame: from Trippin, the website (App Links) and notifications.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inframe/state/deep_links.dart';
+import 'package:inframe/state/push.dart';
 
 void main() {
   test('an event link in every form it arrives in', () {
@@ -24,5 +25,13 @@ void main() {
     ]) {
       expect(eventIdFromLink(Uri.parse(link)), isNull, reason: link);
     }
+  });
+
+  test('a notification opens its event', () {
+    expect(pushLink({'type': 'PHOTOS_ADDED', 'eventId': 'e-1', 'link': 'inframe://app/events/e-1'}).toString(), 'inframe://app/events/e-1');
+    expect(pushLink({'type': 'JOINED', 'eventId': 'e-2'}).toString(), 'inframe://app/events/e-2');
+    expect(pushLink({'type': 'INVITE', 'eventId': 'e-3'}), isNull, reason: 'not theirs until accepted');
+    expect(pushLink({'type': 'X', 'link': 'https://evil.example/'}), isNull);
+    expect(pushLink({'type': 'X'}), isNull);
   });
 }

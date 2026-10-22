@@ -9,3 +9,6 @@ data/
 apps/web/public/inframe.apk
 apps/web/public/app-version.json
 apps/web/public/.inframe-apk.*
+
+# Firebase config for push notifications: from the Firebase console, never committed.
+apps/mobile/android/app/google-services.json

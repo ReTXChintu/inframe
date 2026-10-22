@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../state/deep_links.dart';
+import '../state/push.dart';
 import '../theme.dart';
 import '../widgets/update_banner.dart';
 import 'events_screen.dart';
@@ -25,6 +26,8 @@ class _HomeScreenState extends State<HomeScreen> {
       checkForAppUpdate(context);
       // Signed in: an event link that arrived before now opens.
       DeepLinks.instance.attach();
+      // And this phone gets the account's notifications.
+      Push.instance.register();
     });
   }
 

@@ -87,7 +87,7 @@ const fcmSender: Sender = async (token, message) => {
         token,
         notification: { title: message.title, body: message.body },
         data: message.data,
-        android: { priority: "HIGH", notification: { channel_id: "inframe_updates" } },
+        android: { priority: "HIGH" },
       },
     }),
     signal: AbortSignal.timeout(15_000),

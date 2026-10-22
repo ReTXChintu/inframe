@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'screens/auth_screens.dart';
 import 'screens/home.dart';
 import 'state/deep_links.dart';
+import 'state/push.dart';
 import 'state/session.dart';
 import 'theme.dart';
 import 'uploads/upload_queue.dart';
@@ -21,6 +22,8 @@ void main() {
   uploads.init().catchError((Object e) => debugPrint('uploads: init failed: $e'));
   // Event links (from Trippin, the website, notifications): opened once signed in.
   DeepLinks.instance.start();
+  // Push notifications: Firebase set up early so a tap that launched the app is seen.
+  Push.instance.start();
   runApp(ChangeNotifierProvider(create: (_) => Session()..start(), child: const InFrameApp()));
 }
 
@@ -31,6 +34,7 @@ class InFrameApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: appNavigatorKey,
+      scaffoldMessengerKey: pushMessengerKey,
       title: 'InFrame',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),

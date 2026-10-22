@@ -4,6 +4,7 @@ import '../api/api.dart';
 import '../api/models.dart';
 import '../auth/identity.dart';
 import '../uploads/upload_queue.dart';
+import 'push.dart';
 
 enum SessionStatus { loading, signedIn, signedOut }
 
@@ -59,6 +60,8 @@ class Session extends ChangeNotifier {
 
   /// Ends the InFrame session here, then the identity server's (so "Sign in" asks again).
   Future<void> signOut() async {
+    // While still signed in: this phone stops getting the account's notifications.
+    await Push.instance.unregister();
     try {
       await api.post<dynamic>('/api/auth/logout');
     } on ApiException {
