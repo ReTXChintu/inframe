@@ -478,3 +478,97 @@ describe("users/:sub", () => {
     assert.deepEqual((await signed("GET", "/api/integrations/trippin/users/sub-nobody")).json(), { exists: false });
   });
 });
+
+describe("linking an existing event", () => {
+  let codes = 0;
+  async function event(ownerSub: string, name: string, startsOn: string | null, endsOn: string | null, external?: { id: string; linked: boolean }) {
+    const owner = await userBySub(ownerSub);
+    const row = (
+      await pool.query(
+        `INSERT INTO events (owner_id, name, kind, starts_on, ends_on, join_code, external_source, external_id, external_linked)
+         VALUES ($1, $2, 'trip', $3, $4, $5, $6, $7, $8) RETURNING id`,
+        [owner.id, name, startsOn, endsOn, `ATTACH${++codes}`, external ? "trippin" : null, external?.id ?? null, external?.linked ?? null],
+      )
+    ).rows[0];
+    await pool.query("INSERT INTO event_members (event_id, user_id, role) VALUES ($1, $2, 'owner')", [row.id, owner.id]);
+    return row.id as string;
+  }
+
+  const porto = (overrides: Record<string, unknown> = {}) =>
+    trip({ id: "trip-porto", title: "Porto weekend", startDate: "2026-12-04", endDate: "2026-12-06", url: "https://trippin.test/trips/trip-porto", ...overrides });
+
+  const candidates = (query: Record<string, string>) =>
+    signed("GET", `/api/integrations/trippin/candidates?${new URLSearchParams({ tripId: "trip-porto", title: "Porto weekend", start: "2026-12-04", end: "2026-12-06", ...query })}`);
+
+  let overlapping = "";
+  let named = "";
+  let elsewhere = "";
+  let notHers = "";
+
+  test("candidates: the owner's events, best match first; others' and ones linked elsewhere left out", async () => {
+    overlapping = await event(olivia.sub, "December break", "2026-12-03", "2026-12-05");
+    named = await event(olivia.sub, "Porto 2024", "2024-05-01", "2024-05-03");
+    elsewhere = await event(olivia.sub, "Porto too", "2026-12-04", "2026-12-06", { id: "trip-other", linked: true });
+    notHers = await event(ed.sub, "Porto weekend", "2026-12-04", "2026-12-06");
+
+    const res = await candidates({ sub: olivia.sub });
+    assert.equal(res.statusCode, 200);
+    const list = res.json().candidates as { id: string; name: string; linkedHere: boolean; counts: Record<string, number>; impact: null }[];
+    const ids = list.map((c) => c.id);
+    assert.equal(ids[0], overlapping);
+    assert.equal(ids[1], named);
+    assert.ok(!ids.includes(elsewhere));
+    assert.ok(!ids.includes(notHers));
+    assert.deepEqual(list[0]?.counts, { photos: 0, videos: 0, members: 1 });
+    assert.equal(list[0]?.impact, null);
+    assert.equal(list[0]?.linkedHere, false);
+
+    assert.deepEqual((await candidates({ sub: "sub-nobody" })).json(), { candidates: [] });
+    assert.equal((await candidates({ sub: olivia.sub, start: "soon" })).statusCode, 400);
+    assert.equal((await signed("GET", "/api/integrations/trippin/candidates?sub=x", undefined, { unsigned: true })).statusCode, 401);
+  });
+
+  test("attachTo links the chosen event instead of making one", async () => {
+    const before = (await pool.query("SELECT count(*)::int AS n FROM events")).rows[0].n;
+    const res = await signed("POST", "/api/integrations/trippin/events", {
+      id: "attach-1",
+      type: "trip.linked",
+      trip: porto(),
+      attachTo: overlapping,
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.equal(res.json().remoteId, overlapping);
+    assert.equal((await pool.query("SELECT count(*)::int AS n FROM events")).rows[0].n, before, "no new event");
+    const e = (await pool.query("SELECT name, external_id, external_linked, to_char(starts_on, 'YYYY-MM-DD') AS s FROM events WHERE id = $1", [overlapping])).rows[0];
+    assert.deepEqual(e, { name: "Porto weekend", external_id: "trip-porto", external_linked: true, s: "2026-12-04" });
+    assert.equal((await summary("trip-porto", olivia.sub)).json().url, `${APP_URL}/events/${overlapping}`);
+    const listed = (await candidates({ sub: olivia.sub })).json().candidates as { id: string; linkedHere: boolean }[];
+    assert.equal(listed[0]?.id, overlapping);
+    assert.equal(listed[0]?.linkedHere, true);
+  });
+
+  test("attaching another event takes the link over; the old one becomes an ordinary event", async () => {
+    await deliver("trip.unlinked", { id: "trip-porto" });
+    const res = await signed("POST", "/api/integrations/trippin/events", { id: "attach-2", type: "trip.linked", trip: porto(), attachTo: named });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.equal(res.json().remoteId, named);
+    const old = (await pool.query("SELECT external_source, external_id FROM events WHERE id = $1", [overlapping])).rows[0];
+    assert.deepEqual(old, { external_source: null, external_id: null });
+  });
+
+  test("refuses someone else's event and one linked to another trip, changing nothing", async () => {
+    for (const [attachTo, code] of [
+      [notHers, "attach_not_found"],
+      [crypto.randomUUID(), "attach_not_found"],
+      ["not-a-uuid", "attach_not_found"],
+      [elsewhere, "attach_linked_elsewhere"],
+    ] as const) {
+      const res = await signed("POST", "/api/integrations/trippin/events", { id: `refuse-${attachTo}`, type: "trip.linked", trip: porto(), attachTo });
+      assert.equal(res.statusCode, 409, attachTo);
+      assert.equal(res.json().code ?? res.json().error?.code, code, res.body);
+    }
+    assert.equal((await pool.query("SELECT external_id FROM events WHERE id = $1", [named])).rows[0].external_id, "trip-porto", "still linked");
+    assert.equal((await pool.query("SELECT external_id FROM events WHERE id = $1", [elsewhere])).rows[0].external_id, "trip-other");
+    assert.equal((await pool.query("SELECT count(*)::int AS n FROM integration_events WHERE id LIKE 'refuse-%'")).rows[0].n, 0);
+  });
+});

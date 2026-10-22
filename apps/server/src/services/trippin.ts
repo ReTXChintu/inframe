@@ -50,6 +50,8 @@ export interface TrippinDelivery {
   id: string;
   type: TrippinEventType;
   trip: { id: string } & Partial<TrippinTrip>;
+  /** trip.linked only: link this existing event of the owner's instead of making one. */
+  attachTo?: string;
 }
 
 const ROLE: Record<TrippinRole, Exclude<Role, "owner">> = { owner: "cohost", editor: "cohost", viewer: "member" };
@@ -169,6 +171,128 @@ const tripDates = (trip: Partial<TrippinTrip>) => {
   return { start, end };
 };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The owner chose one of their existing events for this trip (see
+ * tripCandidates): it takes over the trip's link, and the trip.linked that
+ * follows treats it as an event "linked before". An event that held the
+ * link until now goes back to being an ordinary event.
+ */
+async function attachExisting(db: Queryable, tripId: string, eventId: string, ownerId: string) {
+  const target = UUID.test(eventId)
+    ? await one<{ id: string; owner_id: string; external_source: string | null; external_id: string | null; external_linked: boolean | null }>(
+        "SELECT id, owner_id, external_source, external_id, external_linked FROM events WHERE id = $1 FOR UPDATE",
+        [eventId],
+        db,
+      )
+    : null;
+  if (!target || target.owner_id !== ownerId) {
+    throw new AppError(409, "attach_not_found", "That InFrame event isn't one of the trip owner's, so it can't be linked.");
+  }
+  const mine = target.external_source === SOURCE && target.external_id === tripId;
+  if (mine) return;
+  if (target.external_source === SOURCE && target.external_linked) {
+    throw new AppError(409, "attach_linked_elsewhere", "That InFrame event is already linked to another Trippin trip. Unlink it there first.");
+  }
+  await db.query(
+    `UPDATE events SET external_source = NULL, external_id = NULL, external_url = NULL, external_linked = NULL, updated_at = now()
+      WHERE external_source = $1 AND external_id = $2 AND id <> $3`,
+    [SOURCE, tripId, target.id],
+  );
+  await db.query(
+    "UPDATE events SET external_source = $2, external_id = $3, external_linked = false, updated_at = now() WHERE id = $1",
+    [target.id, SOURCE, tripId],
+  );
+}
+
+/** Lower-case words of two letters or more, for comparing names. */
+function nameWords(name: string): Set<string> {
+  return new Set(name.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((word) => word.length > 1));
+}
+
+/** How alike two names are, 0..1: the share of words they have in common. */
+export function nameLikeness(a: string, b: string): number {
+  const x = nameWords(a);
+  const y = nameWords(b);
+  if (x.size === 0 || y.size === 0) return 0;
+  const common = [...x].filter((word) => y.has(word)).length;
+  return common / new Set([...x, ...y]).size;
+}
+
+const DAY_MS = 86_400_000;
+const dayTime = (day: string) => Date.parse(`${day}T00:00:00Z`);
+
+/** Days two inclusive date spans share. */
+function overlapDays(a: { start: string; end: string }, b: { start: string; end: string }): number {
+  const from = Math.max(dayTime(a.start), dayTime(b.start));
+  const to = Math.min(dayTime(a.end), dayTime(b.end));
+  return to < from ? 0 : Math.round((to - from) / DAY_MS) + 1;
+}
+
+export interface TripCandidate {
+  id: string;
+  name: string;
+  startDate: string | null;
+  endDate: string | null;
+  archived: false;
+  /** Already holds this trip's link (linked now or before). */
+  linkedHere: boolean;
+  counts: { photos: number; videos: number; members: number };
+  /** Linking only renames and re-dates an event and adds the trip's people: nothing leaves it. */
+  impact: null;
+}
+
+/**
+ * The trip owner's events that this Trippin trip could be linked to instead
+ * of a new one, best match first: events whose dates overlap the trip's, then
+ * those with a similar name. An event linked to a different trip is left out.
+ */
+export async function tripCandidates(q: { sub: string; tripId: string; title: string; start: string; end: string }): Promise<TripCandidate[]> {
+  const owner = await one<{ id: string }>("SELECT id FROM users WHERE oidc_sub = $1", [q.sub]);
+  if (!owner) return [];
+  const rows = await query<{
+    id: string;
+    name: string;
+    starts_on: string | null;
+    ends_on: string | null;
+    external_source: string | null;
+    external_id: string | null;
+    updated_at: Date;
+    photos: number;
+    videos: number;
+    members: number;
+  }>(
+    `SELECT e.id, e.name, to_char(e.starts_on, 'YYYY-MM-DD') AS starts_on, to_char(e.ends_on, 'YYYY-MM-DD') AS ends_on,
+            e.external_source, e.external_id, e.updated_at,
+            (SELECT count(*)::int FROM photos p WHERE p.event_id = e.id AND p.status = 'ready' AND p.media_type = 'image') AS photos,
+            (SELECT count(*)::int FROM photos p WHERE p.event_id = e.id AND p.status = 'ready' AND p.media_type = 'video') AS videos,
+            (SELECT count(*)::int FROM event_members m WHERE m.event_id = e.id) AS members
+       FROM events e
+      WHERE e.owner_id = $1
+        AND NOT (e.external_source IS NOT DISTINCT FROM $2 AND e.external_id IS DISTINCT FROM $3 AND e.external_linked IS TRUE)`,
+    [owner.id, SOURCE, q.tripId],
+  );
+  const scored = rows.map((e) => {
+    const linkedHere = e.external_source === SOURCE && e.external_id === q.tripId;
+    const start = e.starts_on;
+    const end = e.ends_on ?? e.starts_on;
+    const days = start && end ? overlapDays({ start, end }, { start: q.start, end: q.end }) : 0;
+    return { e, linkedHere, score: (linkedHere ? 100 : 0) + days * 2 + nameLikeness(e.name, q.title) * 5 };
+  });
+  scored.sort((a, b) => b.score - a.score || b.e.updated_at.getTime() - a.e.updated_at.getTime());
+  return scored.slice(0, 10).map(({ e, linkedHere }) => ({
+    id: e.id,
+    name: e.name,
+    startDate: e.starts_on,
+    endDate: e.ends_on,
+    archived: false,
+    linkedHere,
+    counts: { photos: e.photos, videos: e.videos, members: e.members },
+    impact: null,
+  }));
+}
+
 interface Applied {
   response: Record<string, unknown>;
   eventId: string | null;
@@ -206,6 +330,10 @@ export async function handleTrippinEvent(delivery: TrippinDelivery, log?: Fastif
       db,
     );
     if (seen) return { response: seen.response, eventId: null, members: null };
+
+    if (delivery.type === "trip.linked" && delivery.attachTo) {
+      await attachExisting(db, trip.id, delivery.attachTo, ownerId!);
+    }
 
     const existing = await one<{ id: string; owner_id: string; external_linked: boolean | null }>(
       "SELECT id, owner_id, external_linked FROM events WHERE external_source = $1 AND external_id = $2",

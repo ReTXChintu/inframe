@@ -3,7 +3,7 @@ import { z } from "zod";
 import { config } from "../config.js";
 import { verifySuiteSignature } from "../auth/suite.js";
 import { AppError, parse } from "../lib/errors.js";
-import { handleTrippinEvent, suiteUserExists, tripSummary, type TrippinDelivery } from "../services/trippin.js";
+import { handleTrippinEvent, suiteUserExists, tripCandidates, tripSummary, type TrippinDelivery } from "../services/trippin.js";
 
 /*
  * Trippin → InFrame, server to server. No user tokens here: every request
@@ -47,7 +47,12 @@ const delivery = z.object({
   occurredAt: z.string().max(100).nullish(),
   // Unlinking only needs to say which trip.
   trip: z.object({ id: tripId }).passthrough(),
+  // trip.linked: one of the owner's existing events to link instead of a new one.
+  attachTo: z.string().trim().min(1).max(200).nullish(),
 });
+
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date.");
+const candidatesQuery = z.object({ sub, tripId, title: z.string().max(500).default(""), start: day, end: day });
 
 /** Raw request bodies, kept for the signature check. */
 const rawBodies = new WeakMap<FastifyRequest, Buffer>();
@@ -89,7 +94,14 @@ export async function trippinRoutes(app: FastifyInstance) {
   app.post("/api/integrations/trippin/events", async (req) => {
     const body = parse(delivery, req.body);
     const trip = body.type === "trip.unlinked" ? body.trip : parse(fullTrip, body.trip);
-    return handleTrippinEvent({ id: body.id, type: body.type, trip } as TrippinDelivery, req.log);
+    const attachTo = body.type === "trip.linked" ? body.attachTo ?? undefined : undefined;
+    return handleTrippinEvent({ id: body.id, type: body.type, trip, attachTo } as TrippinDelivery, req.log);
+  });
+
+  // The trip owner's events that could be linked to this trip instead of a new one.
+  app.get("/api/integrations/trippin/candidates", async (req) => {
+    const q = parse(candidatesQuery, req.query);
+    return { candidates: await tripCandidates(q) };
   });
 
   app.get("/api/integrations/trippin/trips/:trippinTripId/summary", async (req, reply) => {
