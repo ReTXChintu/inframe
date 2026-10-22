@@ -9,6 +9,7 @@ import '../api/models.dart';
 import '../theme.dart';
 import '../uploads/upload_queue.dart';
 import '../widgets/common.dart';
+import '../widgets/guest_limits.dart';
 import 'gallery_picker.dart';
 
 /// Pick photos and videos from InFrame's own gallery → background uploads →
@@ -57,6 +58,7 @@ class _UploadScreenState extends State<UploadScreen> {
         toast(context, "Nothing new to upload — they're all here already.");
         return;
       }
+      if (!_withinAllowance(chosen)) return;
       await _askForNotifications();
       await uploads.add(widget.event.id, chosen, folderId: _folderId);
     } on ApiException catch (e) {
@@ -64,6 +66,23 @@ class _UploadScreenState extends State<UploadScreen> {
     } finally {
       if (mounted) setState(() => _preparing = false);
     }
+  }
+
+  /// A guest's per-event allowance: said here before anything is sent (the server checks again).
+  bool _withinAllowance(List<PickedMedia> chosen) {
+    final a = widget.event.guestAllowance;
+    if (a == null) return true;
+    String? problem;
+    if (a.exhausted) {
+      problem = "You've reached what this event allows each guest to add.";
+    } else if (a.itemsLeft != null && chosen.length > a.itemsLeft!) {
+      problem = 'This event lets you add ${plural(a.itemsLeft!, 'more file')}; pick fewer.';
+    } else if (a.bytesLeft != null) {
+      final bytes = chosen.fold(0, (n, f) => n + f.size);
+      if (bytes > a.bytesLeft!) problem = 'You have ${formatBytes(a.bytesLeft)} left in this event; these come to ${formatBytes(bytes)}.';
+    }
+    if (problem != null) toast(context, problem, error: true);
+    return problem == null;
   }
 
   /// Name, size, date, MIME type and content URI for each picked asset.
@@ -200,13 +219,15 @@ class _UploadScreenState extends State<UploadScreen> {
         final failed = count((e) => e.stage == UploadStage.failed);
         final matched = count((e) => e.matches > 0);
         final waiting = count((e) => e.active);
+        final allowance = event.guestAllowance;
+        final exhausted = allowance?.exhausted ?? false;
 
         return Scaffold(
           appBar: AppBar(
             title: const Text('Add photos & videos'),
             actions: [if (done + failed > 0) TextButton(onPressed: () => uploads.clearFinished(event.id), child: const Text('Clear finished'))],
           ),
-          floatingActionButton: _preparing
+          floatingActionButton: _preparing || exhausted
               ? null
               : FloatingActionButton.extended(
                   icon: const Icon(Icons.add_photo_alternate_outlined),
@@ -224,6 +245,7 @@ class _UploadScreenState extends State<UploadScreen> {
                       'Photos are scanned for faces; videos are stored as they are. Uploads keep going if you leave the app.',
                       style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: p.tx3),
                     ),
+                    if (allowance != null && allowance.limited) ...[const SizedBox(height: 12), GuestAllowanceCard(allowance)],
                     if (event.canViewAll && event.folders.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       DsLabel(
@@ -260,11 +282,15 @@ class _UploadScreenState extends State<UploadScreen> {
                           ),
                         ),
                       ),
-                    if (items.isEmpty && !_preparing)
+                    if (items.isEmpty && !_preparing && exhausted)
+                      const SizedBox.shrink()
+                    else if (items.isEmpty && !_preparing)
                       EmptyView(
                         icon: Icons.add_photo_alternate_outlined,
                         title: 'Choose photos and videos',
-                        body: 'Pick as many as you like — whole albums at once.',
+                        body: allowance?.itemsLeft != null
+                            ? 'Pick up to ${plural(allowance!.itemsLeft!, 'file')} — whole albums at once.'
+                            : 'Pick as many as you like — whole albums at once.',
                         action: FilledButton.icon(onPressed: _pick, icon: const Icon(Icons.photo_library_outlined), label: const Text('Open gallery')),
                       )
                     else if (items.isNotEmpty) ...[

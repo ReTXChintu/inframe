@@ -99,6 +99,11 @@ class EventDetail {
   bool get canUpload => _b(_m(j['can'])['upload']);
   bool get canFaceSearch => _b(_m(j['can'])['faceSearch']);
   Map<String, dynamic> get settings => _m(j['settings']);
+  /// What each guest may add in all; null = no limit (and on older servers, which had none).
+  int? get guestMaxItems => _in(settings['guestMaxItems']);
+  int? get guestMaxBytes => _in(settings['guestMaxBytes']);
+  /// This viewer's share of the per-guest allowance; null for hosts, who have no cap.
+  GuestAllowance? get guestAllowance => j['guestAllowance'] is Map ? GuestAllowance(_m(j['guestAllowance'])) : null;
   String? get joinCode => _s(j['joinCode']);
   String? get coverUrl => _s(j['coverUrl']);
   Map<String, dynamic> get storage => _m(j['storage']);
@@ -114,6 +119,23 @@ class EventDetail {
   List<Folder> get folders => _l(j['folders']).map(Folder.new).toList();
   List<Person> get people => _l(j['people']).map(Person.new).toList();
   Person? get self => people.where((p) => p.isSelf).firstOrNull;
+}
+
+/// How much of an event's per-guest allowance a guest has left. A null
+/// maximum means that side isn't limited.
+class GuestAllowance {
+  GuestAllowance(this.j);
+  final Map<String, dynamic> j;
+  int? get maxItems => _in(j['maxItems']);
+  int? get maxBytes => _in(j['maxBytes']);
+  int get usedItems => _i(j['usedItems']);
+  int get usedBytes => _i(j['usedBytes']);
+  bool get limited => maxItems != null || maxBytes != null;
+  /// Files still allowed; null when the count isn't limited.
+  int? get itemsLeft => maxItems == null ? null : (maxItems! - usedItems).clamp(0, maxItems!);
+  /// Bytes still allowed; null when the size isn't limited.
+  int? get bytesLeft => maxBytes == null ? null : (maxBytes! - usedBytes).clamp(0, maxBytes!);
+  bool get exhausted => itemsLeft == 0 || bytesLeft == 0;
 }
 
 class Photo {

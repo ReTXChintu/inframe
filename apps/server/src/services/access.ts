@@ -29,7 +29,68 @@ export interface EventRow {
   external_url: string | null;
   /** false = it was linked once and has since been unlinked (it's a normal event now). */
   external_linked: boolean | null;
+  /** What each guest may add in all: files, and bytes (pg hands bigint back as a string). NULL = no limit. */
+  guest_max_items: number | null;
+  guest_max_bytes: number | string | null;
   created_at: Date;
+}
+
+export interface GuestLimits {
+  maxItems: number | null;
+  maxBytes: number | null;
+}
+
+export interface GuestAllowance extends GuestLimits {
+  usedItems: number;
+  usedBytes: number;
+}
+
+export const guestLimits = (e: Pick<EventRow, "guest_max_items" | "guest_max_bytes">): GuestLimits => ({
+  maxItems: e.guest_max_items ?? null,
+  maxBytes: e.guest_max_bytes === null || e.guest_max_bytes === undefined ? null : Number(e.guest_max_bytes),
+});
+
+/** What this guest has added to the event so far (failed uploads don't count: they're not in storage). */
+export async function guestUsage(eventId: string, userId: string): Promise<{ usedItems: number; usedBytes: number }> {
+  const row = await one<{ items: number; bytes: string | null }>(
+    `SELECT count(*)::int AS items, COALESCE(sum(size_bytes), 0)::text AS bytes
+       FROM photos WHERE event_id = $1 AND uploader_id = $2 AND source = 'upload' AND status <> 'failed'`,
+    [eventId, userId],
+  );
+  return { usedItems: row?.items ?? 0, usedBytes: Number(row?.bytes ?? 0) };
+}
+
+export function formatBytes(n: number): string {
+  if (n >= 1024 ** 3) return `${+(n / 1024 ** 3).toFixed(n % 1024 ** 3 === 0 ? 0 : 1)} GB`;
+  if (n >= 1024 ** 2) return `${Math.round(n / 1024 ** 2)} MB`;
+  return `${Math.max(1, Math.round(n / 1024))} KB`;
+}
+
+/**
+ * The reason a guest's upload is refused by the event's per-guest limit, or
+ * null when it fits. `nextBytes` is the size of the file about to be added
+ * (unknown before it's read: pass 0 to check only the count).
+ */
+export function guestLimitError(limits: GuestLimits, used: { usedItems: number; usedBytes: number }, nextBytes: number): AppError | null {
+  if (limits.maxItems !== null && used.usedItems >= limits.maxItems) {
+    return new AppError(
+      409,
+      "guest_limit",
+      `This event allows ${limits.maxItems} ${limits.maxItems === 1 ? "photo" : "photos"} per guest; you've reached it.`,
+      { limit: "items", maxItems: limits.maxItems, usedItems: used.usedItems },
+    );
+  }
+  if (limits.maxBytes !== null && used.usedBytes + nextBytes > limits.maxBytes) {
+    const detail = used.usedBytes >= limits.maxBytes
+      ? "you've reached it."
+      : `you've used ${formatBytes(used.usedBytes)}, and this file would take you over it.`;
+    return new AppError(409, "guest_limit", `This event allows ${formatBytes(limits.maxBytes)} per guest; ${detail}`, {
+      limit: "bytes",
+      maxBytes: limits.maxBytes,
+      usedBytes: used.usedBytes,
+    });
+  }
+  return null;
 }
 
 export interface EventAccess {

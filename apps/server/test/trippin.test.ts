@@ -122,7 +122,7 @@ async function tokenFor(sub: string) {
   return `Bearer ${await signAccessToken(u.id, u.token_version)}`;
 }
 
-const as = async (sub: string, method: "GET" | "POST" | "PUT", url: string, payload?: unknown) =>
+const as = async (sub: string, method: "GET" | "POST" | "PUT" | "PATCH", url: string, payload?: unknown) =>
   app.inject({ method, url, headers: { authorization: await tokenFor(sub) }, ...(payload !== undefined ? { payload: payload as object } : {}) });
 
 function photoUpload(name: string) {
@@ -220,6 +220,7 @@ describe("trip.linked", () => {
     assert.equal(e.storage_connection_id, null);
     assert.equal(e.storage_folder_id, null);
     assert.match(e.join_code, /^[A-Z0-9]{8}$/);
+    assert.equal(e.join_enabled, false, "the people come from the trip: the code starts off");
 
     // Everyone was created just in time, like a first sign-in: a self person each, the first one admin.
     const owner = await userBySub(olivia.sub);
@@ -382,9 +383,11 @@ describe("keeping the event in step", () => {
   });
 
   test("trip.members_changed adds and removes Trippin's members, never the owner or people who joined in InFrame", async () => {
-    // Someone who joined with the event's code, in InFrame itself.
+    // Someone who joined with the event's code, in InFrame itself — once the owner opened the code up.
     await pool.query("INSERT INTO users (email, name, oidc_sub) VALUES ('jo@example.com', 'Jo', 'sub-jo')");
     const code = (await pool.query("SELECT join_code FROM events WHERE id = $1", [eventId])).rows[0].join_code;
+    assert.equal((await as("sub-jo", "POST", `/api/join/${code}`)).statusCode, 404, "a linked event's code is off until the owner turns it on");
+    assert.equal((await as(olivia.sub, "PATCH", `/api/events/${eventId}`, { joinEnabled: true })).statusCode, 200);
     assert.equal((await as("sub-jo", "POST", `/api/join/${code}`)).statusCode, 200);
 
     // Vic leaves the trip, Nora joins, Ed becomes a viewer; the owner isn't even listed.

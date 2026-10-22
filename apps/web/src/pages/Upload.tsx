@@ -2,6 +2,7 @@ import { useRef, useState, type DragEvent } from "react";
 import { Link, useParams } from "react-router";
 import { ArrowLeft, CheckCircle2, CircleAlert, Film, ImagePlus, RotateCcw, ScanFace, UploadCloud } from "lucide-react";
 import { formatBytes, plural, PROVIDER_LABEL } from "@/lib/format";
+import { allowanceLeft, type GuestAllowance } from "@/lib/types";
 import { addFiles, cancelQueued, clearFinished, fileKey, findDuplicates, isVideoFile, retry, useUploads, type UploadItem } from "@/lib/uploads";
 import { errorMessage, useFeedback } from "@/components/feedback";
 import { Badge, Button, Card, cx, EmptyState, IconTile, LinkButton, Modal, SelectField } from "@/components/ui";
@@ -11,6 +12,27 @@ import { LoadingBlock } from "./Events";
 const ACCEPT = "image/*,video/*,.heic,.heif";
 const isImage = (f: File) => f.type.startsWith("image/") || /\.(heic|heif|jpe?g|png|webp|gif|avif|tiff?|bmp|dng)$/i.test(f.name);
 const isMedia = (f: File) => isImage(f) || isVideoFile(f);
+
+/** What a guest may still add to this event, from the event's per-guest limit. */
+export function allowanceText(allowance: GuestAllowance) {
+  const left = allowanceLeft(allowance);
+  if (!left.limited) return null;
+  if (left.exhausted) return "You've reached what this event allows each guest to add.";
+  const parts = [left.items !== null ? plural(left.items, "more file") : null, left.bytes !== null ? `${formatBytes(left.bytes)} left` : null].filter(Boolean);
+  return `You can add ${parts.join(" · ")}.`;
+}
+
+function AllowanceNote({ allowance }: { allowance: GuestAllowance }) {
+  const text = allowanceText(allowance);
+  if (!text) return null;
+  const exhausted = allowanceLeft(allowance).exhausted;
+  return (
+    <p className={cx("mt-2 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-body-s font-medium", exhausted ? "bg-warn-soft text-warn" : "bg-sf2 text-tx2")}>
+      {exhausted && <CircleAlert className="size-4" />}
+      {text}
+    </p>
+  );
+}
 
 export function UploadPage() {
   const { id } = useParams();
@@ -43,6 +65,14 @@ export function UploadPage() {
     const media = files.filter(isMedia);
     if (media.length < files.length) toast(`Skipped ${plural(files.length - media.length, "file")} that aren't photos or videos.`, "info");
     if (!media.length) return;
+    // A guest's allowance: say so before anything is sent (the server checks again).
+    if (event!.guestAllowance) {
+      const left = allowanceLeft(event!.guestAllowance);
+      if (left.exhausted) return toast("You've reached what this event allows each guest to add.", "error");
+      if (left.items !== null && media.length > left.items) return toast(`This event lets you add ${plural(left.items, "more file")}; pick fewer.`, "error");
+      const bytes = media.reduce((n, f) => n + f.size, 0);
+      if (left.bytes !== null && bytes > left.bytes) return toast(`You have ${formatBytes(left.bytes)} left in this event; these come to ${formatBytes(bytes)}.`, "error");
+    }
     setChecking(true);
     try {
       // Same name + size + last-modified as something already in the event = the same file, most likely.
@@ -92,6 +122,7 @@ export function UploadPage() {
             {event.storage.provider ? PROVIDER_LABEL[event.storage.provider] : "storage"}. Photos are scanned for faces; videos are
             stored as they are. Once a file shows “Queued on server”, you can close this tab.
           </p>
+          {event.guestAllowance && <AllowanceNote allowance={event.guestAllowance} />}
         </div>
         {items.length > 0 && done + failed === items.length && (
           <LinkButton to={`/events/${event.id}`} size="lg">

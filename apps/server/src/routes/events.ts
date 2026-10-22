@@ -3,12 +3,14 @@ import { z } from "zod";
 import { requireUser } from "../auth/guard.js";
 import { one, query, tx } from "../db/pool.js";
 import { joinCode } from "../lib/crypto.js";
-import { badRequest, conflict, notFound, parse } from "../lib/errors.js";
+import { badRequest, conflict, forbidden, notFound, parse } from "../lib/errors.js";
 import { photoUrl } from "../lib/media-urls.js";
 import { enqueueFaces, enqueueIngest, enqueueSync } from "../jobs/queue.js";
 import { toEvent } from "../realtime/io.js";
 import {
   eventAccess,
+  guestLimits,
+  guestUsage,
   hostAccess,
   ownerAccess,
   storagePendingError,
@@ -116,6 +118,10 @@ async function eventDetail(access: EventAccess, userId: string) {
     : undefined;
   const owner = await one<{ id: string; name: string }>("SELECT id, name FROM users WHERE id = $1", [e.owner_id]);
 
+  // A guest sees how much of the event's per-guest allowance they have left; hosts have no cap.
+  const limits = guestLimits(e);
+  const guestAllowance = access.isHost ? null : { ...limits, ...(await guestUsage(e.id, userId)) };
+
   const autoCover = access.canViewAll && !e.cover_photo_id
     ? (await one<{ id: string }>(
         "SELECT id FROM photos WHERE event_id = $1 AND status = 'ready' ORDER BY sort_at DESC LIMIT 1",
@@ -144,7 +150,11 @@ async function eventDetail(access: EventAccess, userId: string) {
       guestUploads: e.guest_uploads,
       guestsSeeAll: e.guests_see_all,
       faceSearch: e.face_search,
+      // Per guest, in all. null = no limit.
+      guestMaxItems: limits.maxItems,
+      guestMaxBytes: limits.maxBytes,
     },
+    guestAllowance,
     joinCode: access.isHost || e.join_enabled ? e.join_code : null,
     coverPhotoId: e.cover_photo_id,
     coverUrl: coverUrl(e.cover_photo_id ?? autoCover),
@@ -268,9 +278,15 @@ export async function eventRoutes(app: FastifyInstance) {
         guestsSeeAll: z.boolean(),
         faceSearch: z.boolean(),
         coverPhotoId: z.string().uuid().nullable(),
+        // Per-guest upload caps; null lifts one. The owner's call, not a co-host's.
+        guestMaxItems: z.number().int().min(1, "At least 1 photo.").max(1_000_000).nullable(),
+        guestMaxBytes: z.number().int().min(1024 * 1024, "At least 1 MB.").max(1024 ** 5).nullable(),
       }).partial(),
       req.body,
     );
+    if ((body.guestMaxItems !== undefined || body.guestMaxBytes !== undefined) && !access.isOwner) {
+      throw forbidden("Only the event owner can change what guests may upload.");
+    }
     checkDates(
       body.startsOn !== undefined ? body.startsOn : access.event.starts_on,
       body.endsOn !== undefined ? body.endsOn : access.event.ends_on,
@@ -288,6 +304,8 @@ export async function eventRoutes(app: FastifyInstance) {
       guests_see_all: body.guestsSeeAll,
       face_search: body.faceSearch,
       cover_photo_id: body.coverPhotoId,
+      guest_max_items: body.guestMaxItems,
+      guest_max_bytes: body.guestMaxBytes,
     };
     const sets: string[] = [];
     const params: unknown[] = [id];

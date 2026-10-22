@@ -6,6 +6,7 @@ import '../api/models.dart';
 import '../state/session.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/guest_limits.dart';
 import 'share_sheet.dart';
 
 /// Event details, privacy switches (hosts), people and leave/delete.
@@ -68,6 +69,12 @@ class _EventSettingsScreenState extends State<EventSettingsScreen> {
       ),
     );
     if (name != null && name.isNotEmpty) _patch({'name': name});
+  }
+
+  Future<void> _editGuestLimits() async {
+    final event = _event!;
+    final body = await showGuestLimitSheet(context, maxItems: event.guestMaxItems, maxBytes: event.guestMaxBytes);
+    if (body != null) await _patch(body);
   }
 
   Future<void> _memberAction(Member m, String action) async {
@@ -170,6 +177,18 @@ class _EventSettingsScreenState extends State<EventSettingsScreen> {
                       (v) => _patch({'joinEnabled': v}),
                     ),
                     _Switch('Guests can add photos', 'Off: only you and co-hosts can upload.', s['guestUploads'] == true, (v) => _patch({'guestUploads': v})),
+                    ListTile(
+                      key: const ValueKey('guest-limit'),
+                      contentPadding: EdgeInsets.zero,
+                      minTileHeight: 48,
+                      title: Text('Each guest can add up to', style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: p.tx)),
+                      subtitle: Text(
+                        '${guestLimitLabel(event.guestMaxItems, event.guestMaxBytes)}${event.isOwner ? '' : ' · only the owner changes this'}',
+                        style: TextStyle(color: p.tx3, fontSize: 12, height: 16 / 12),
+                      ),
+                      trailing: event.isOwner ? Icon(Icons.chevron_right, color: p.tx3) : null,
+                      onTap: event.isOwner ? _editGuestLimits : null,
+                    ),
                     _Switch(
                       'Guests see all photos',
                       "Off: guests see only photos they're in, their uploads and favourites.",

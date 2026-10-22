@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from "reac
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ExternalLink, RefreshCw, ScanFace, UserPlus, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { formatRange, KIND_LABEL, plural, prettyCode, PROVIDER_LABEL, ROLE_LABEL, timeAgo } from "@/lib/format";
+import { formatBytes, formatRange, KIND_LABEL, plural, prettyCode, PROVIDER_LABEL, ROLE_LABEL, timeAgo } from "@/lib/format";
 import type { EventDetail, EventKind, Member, PendingInvite } from "@/lib/types";
 import { errorMessage, useFeedback } from "@/components/feedback";
 import { ShareSheet } from "@/components/ShareSheet";
@@ -164,6 +164,7 @@ function PrivacySection({ event }: { event: EventDetail }) {
           checked={s.guestUploads}
           onChange={(v) => patch.mutate({ guestUploads: v })}
         />
+        <GuestLimitsRow event={event} patch={patch} />
         <Toggle
           label="Guests see all photos"
           description="Off: guests see only photos they're in, their uploads and favourites."
@@ -202,6 +203,80 @@ function PrivacySection({ event }: { event: EventDetail }) {
         </div>
       )}
     </Section>
+  );
+}
+
+const GB = 1024 ** 3;
+
+/** "300 files · 2 GB" per guest, or "No limit". */
+export function guestLimitLabel(maxItems: number | null, maxBytes: number | null) {
+  const parts = [maxItems !== null ? plural(maxItems, "file") : null, maxBytes !== null ? formatBytes(maxBytes) : null].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "No limit";
+}
+
+/**
+ * How much each guest may add to the event. Owners change it (with "no limit"
+ * on either side); co-hosts just see it.
+ */
+function GuestLimitsRow({ event, patch }: { event: EventDetail; patch: ReturnType<typeof usePatchEvent> }) {
+  const s = event.settings;
+  const [editing, setEditing] = useState(false);
+  const [itemsOn, setItemsOn] = useState(s.guestMaxItems !== null);
+  const [items, setItems] = useState(String(s.guestMaxItems ?? 300));
+  const [bytesOn, setBytesOn] = useState(s.guestMaxBytes !== null);
+  const [gb, setGb] = useState(String(s.guestMaxBytes !== null ? +(s.guestMaxBytes / GB).toFixed(2) : 2));
+
+  const itemsValue = Math.floor(Number(items));
+  const gbValue = Number(gb);
+  const valid = (!itemsOn || (itemsValue >= 1 && itemsValue <= 1_000_000)) && (!bytesOn || (gbValue >= 0.001 && gbValue <= 1024 * 1024));
+
+  return (
+    <div className="py-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <div className="min-w-0 flex-1">
+          <div className="text-body font-medium">Each guest can add up to</div>
+          <div className="text-body-s text-tx3">
+            {guestLimitLabel(s.guestMaxItems, s.guestMaxBytes)}
+            {event.isOwner ? "" : " · only the owner changes this"}
+          </div>
+        </div>
+        {event.isOwner && !editing && (
+          <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
+            Change
+          </Button>
+        )}
+      </div>
+      {editing && (
+        <form
+          className="mt-3 grid gap-4 rounded-lg bg-sf2 p-4 shadow-[inset_0_0_0_1px_var(--ln)] sm:grid-cols-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!valid) return;
+            patch.mutate(
+              { guestMaxItems: itemsOn ? itemsValue : null, guestMaxBytes: bytesOn ? Math.round(gbValue * GB) : null },
+              { onSuccess: () => setEditing(false) },
+            );
+          }}
+        >
+          <div className="grid gap-2">
+            <Toggle label="Limit the number of files" checked={itemsOn} onChange={setItemsOn} />
+            {itemsOn && <TextField label="Files per guest" type="number" min={1} max={1_000_000} step={1} value={items} onChange={(e) => setItems(e.target.value)} />}
+          </div>
+          <div className="grid gap-2">
+            <Toggle label="Limit the total size" checked={bytesOn} onChange={setBytesOn} />
+            {bytesOn && <TextField label="GB per guest" type="number" min={0.001} step={0.5} value={gb} onChange={(e) => setGb(e.target.value)} />}
+          </div>
+          <div className="flex justify-end gap-2 sm:col-span-2">
+            <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!valid} loading={patch.isPending}>
+              Save limit
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }
 

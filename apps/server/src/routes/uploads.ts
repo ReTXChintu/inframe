@@ -11,7 +11,7 @@ import { AppError, badRequest, forbidden, parse, unauthorized } from "../lib/err
 import { mediaTypeOf, mimeFor } from "../lib/images.js";
 import { ensureSpool, newSpoolPath, removeSpool } from "../lib/spool.js";
 import { enqueueIngest } from "../jobs/queue.js";
-import { eventAccess, storagePendingError } from "../services/access.js";
+import { eventAccess, guestLimitError, guestLimits, guestUsage, storagePendingError } from "../services/access.js";
 import { serializePhoto, type PhotoRow } from "../services/photos.js";
 import { parseId } from "./shared.js";
 
@@ -130,6 +130,13 @@ export async function uploadRoutes(app: FastifyInstance) {
     if (q.folderId && !(await one("SELECT 1 FROM folders WHERE id = $1 AND event_id = $2", [q.folderId, eventId]))) {
       throw badRequest("That album isn't in this event.");
     }
+    // A guest's per-event allowance: the count is known now; the size only once the file is in.
+    const limits = access.isHost ? null : guestLimits(access.event);
+    const used = limits ? await guestUsage(eventId, user.id) : null;
+    if (limits && used) {
+      const refused = guestLimitError(limits, used, 0);
+      if (refused) throw refused;
+    }
 
     const file = await req.file({ limits: { fileSize: Math.max(config.maxVideoBytes, config.maxUploadBytes), files: 1 } });
     if (!file) throw badRequest("Attach a photo or video.");
@@ -154,6 +161,13 @@ export async function uploadRoutes(app: FastifyInstance) {
       await removeSpool(spool);
       const mb = mediaType === "video" ? config.MAX_VIDEO_MB : config.MAX_UPLOAD_MB;
       throw new AppError(413, "too_large", `${name} is larger than ${mb} MB.`);
+    }
+    if (limits && used) {
+      const refused = guestLimitError(limits, used, size);
+      if (refused) {
+        await removeSpool(spool);
+        throw refused;
+      }
     }
 
     const row = await one<PhotoRow>(

@@ -81,6 +81,21 @@ export interface Folder {
   count: number;
 }
 
+export interface GuestAllowance {
+  maxItems: number | null;
+  maxBytes: number | null;
+  usedItems: number;
+  usedBytes: number;
+}
+
+/** Files and bytes a guest may still add; null on a side that isn't limited. */
+export function allowanceLeft(a: GuestAllowance) {
+  const clamp = (max: number | null, used: number) => (max === null ? null : Math.max(0, max - used));
+  const items = clamp(a.maxItems, a.usedItems);
+  const bytes = clamp(a.maxBytes, a.usedBytes);
+  return { items, bytes, limited: items !== null || bytes !== null, exhausted: items === 0 || bytes === 0 };
+}
+
 export interface EventDetail {
   id: string;
   name: string;
@@ -93,7 +108,17 @@ export interface EventDetail {
   isHost: boolean;
   isOwner: boolean;
   can: { viewAll: boolean; upload: boolean; faceSearch: boolean };
-  settings: { joinEnabled: boolean; guestUploads: boolean; guestsSeeAll: boolean; faceSearch: boolean };
+  settings: {
+    joinEnabled: boolean;
+    guestUploads: boolean;
+    guestsSeeAll: boolean;
+    faceSearch: boolean;
+    /** What each guest may add in all; null = no limit. */
+    guestMaxItems: number | null;
+    guestMaxBytes: number | null;
+  };
+  /** This viewer's share of the per-guest allowance; null for hosts, who have no cap. */
+  guestAllowance: GuestAllowance | null;
   joinCode: string | null;
   coverPhotoId: string | null;
   coverUrl: string | null;
