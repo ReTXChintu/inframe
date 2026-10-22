@@ -7,6 +7,7 @@ import { startWorkers } from "./jobs/workers.js";
 import { attachRealtime, closeRealtime } from "./realtime/io.js";
 import { loadSettings } from "./services/settings.js";
 import { ensureSpool } from "./lib/spool.js";
+import { startPhotoPushLoop, stopPhotoPushLoop } from "./services/push.js";
 
 const app = await buildApp();
 
@@ -29,6 +30,8 @@ if (config.isProd && !config.httpsApp) {
   app.log.warn("APP_URL is not https: the sign-in and session cookies can't be marked Secure.");
 }
 await app.listen({ port: config.PORT, host: "0.0.0.0" });
+// New-photo notifications, sent in batches (the workers only count them).
+startPhotoPushLoop(app.log);
 app.log.info(`InFrame API on :${config.PORT} — open ${config.appUrl}`);
 
 let stopping = false;
@@ -36,6 +39,7 @@ async function shutdown(signal: string) {
   if (stopping) return;
   stopping = true;
   app.log.info(`${signal}: shutting down`);
+  stopPhotoPushLoop();
   await closeRealtime();
   await app.close();
   await boss.stop({ graceful: true, timeout: 20_000 }).catch(() => {});

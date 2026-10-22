@@ -11,6 +11,7 @@ import { matchPerson } from "../services/matching.js";
 import { modelSettings } from "../services/settings.js";
 import { serializeUser } from "./auth.js";
 import { parseId, PERSON_COLUMNS, personName, serializePerson, type PersonRow } from "./shared.js";
+import { registerDevice, unregisterDevice } from "../services/push.js";
 
 const MAX_FAMILY = 12;
 
@@ -73,6 +74,19 @@ export async function meRoutes(app: FastifyInstance) {
   });
 
   // ─── People: me + family members ────────────────────────────────────────
+  // This phone's push token (after sign-in), and dropping it (at sign-out).
+  const device = z.object({ token: z.string().trim().min(10).max(4096), platform: z.enum(["android", "ios"]).default("android") });
+  app.post("/api/me/devices", async (req) => {
+    const body = parse(device, req.body);
+    await registerDevice(req.user.id, body.token, body.platform);
+    return { registered: true };
+  });
+  app.delete("/api/me/devices", async (req) => {
+    const body = parse(device.pick({ token: true }), req.body);
+    await unregisterDevice(req.user.id, body.token);
+    return { registered: false };
+  });
+
   app.get("/api/people", async (req) => {
     const rows = await query<PersonRow>(
       `SELECT ${PERSON_COLUMNS},

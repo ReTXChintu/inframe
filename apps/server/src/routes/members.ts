@@ -10,6 +10,7 @@ import { evictFromEvent, toEvent, toUser } from "../realtime/io.js";
 import { eventAccess, hostAccess } from "../services/access.js";
 import { clearMemberMatches, matchMemberInEvent } from "../services/matching.js";
 import { email, idParam, parseId } from "./shared.js";
+import { displayName, eventData, notify } from "../services/push.js";
 
 const INVITE_DAYS = 14;
 const KIND_LABEL: Record<string, string> = { trip: "trip", wedding: "wedding", party: "party", other: "event" };
@@ -24,7 +25,14 @@ async function addMember(eventId: string, userId: string, role: "cohost" | "memb
     [eventId, userId, role],
   );
   const matched = await matchMemberInEvent(userId, eventId);
-  if (inserted?.fresh) toEvent(eventId, "event:members", { eventId });
+  if (inserted?.fresh) {
+    toEvent(eventId, "event:members", { eventId });
+    // The owner hears who joined (by code or invite).
+    const event = await one<{ owner_id: string; name: string }>("SELECT owner_id, name FROM events WHERE id = $1", [eventId]);
+    if (event && event.owner_id !== userId) {
+      notify(event.owner_id, { title: `${await displayName(userId)} joined ${event.name}`, body: "Their photos show up as they add them.", data: eventData("JOINED", eventId) });
+    }
+  }
   return { matched };
 }
 
@@ -182,7 +190,14 @@ export async function memberRoutes(app: FastifyInstance) {
       });
       // Already on InFrame? Show it in their app straight away.
       const invitee = await one<{ id: string }>("SELECT id FROM users WHERE email = $1", [to]);
-      if (invitee) toUser(invitee.id, "invites:changed", {});
+      if (invitee) {
+        toUser(invitee.id, "invites:changed", {});
+        notify(invitee.id, {
+          title: `${req.user.name} invited you to ${e.name}`,
+          body: body.role === "cohost" ? "As a co-host. Open InFrame to accept." : "Open InFrame to accept and add your photos.",
+          data: { type: "INVITE", eventId: id },
+        });
+      }
       sent++;
     }
     return { sent, skipped };

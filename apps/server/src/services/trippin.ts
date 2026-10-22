@@ -8,6 +8,7 @@ import { userFromIdentity } from "../routes/auth.js";
 import { uniqueJoinCode } from "../routes/events.js";
 import type { Role } from "./access.js";
 import { clearMemberMatches, matchMemberInEvent } from "./matching.js";
+import { eventData, notify } from "./push.js";
 
 /*
  * Trippin (the suite's trip planner) links a trip to an InFrame event when
@@ -411,9 +412,12 @@ export async function handleTrippinEvent(delivery: TrippinDelivery, log?: Fastif
       evictFromEvent(userId, eventId);
       toUser(userId, "event:removed", { eventId });
     }
-    for (const userId of members?.added ?? []) {
+    const added = members?.added ?? [];
+    const name = added.length > 0 ? (await one<{ name: string }>("SELECT name FROM events WHERE id = $1", [eventId]))?.name : null;
+    for (const userId of added) {
       await matchMemberInEvent(userId, eventId);
       toUser(userId, "event:updated", { eventId });
+      notify(userId, { title: `You're in ${name ?? "a trip"}`, body: "Added from Trippin. Everyone's trip photos land here.", data: eventData("ADDED", eventId) });
     }
   }
   return applied.response;

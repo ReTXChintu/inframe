@@ -20,6 +20,7 @@ import {
   StorageError,
 } from "../storage/index.js";
 import type { StorageProvider } from "../storage/types.js";
+import { notePhotoReady } from "../services/push.js";
 import {
   boss,
   enqueueFaces,
@@ -35,6 +36,8 @@ import {
 interface PhotoJobRow {
   id: string;
   event_id: string;
+  /** Null for photos found in the storage folder rather than uploaded. */
+  uploader_id: string | null;
   folder_id: string | null;
   source: "upload" | "storage";
   media_type: "image" | "video";
@@ -177,6 +180,8 @@ async function ingest(job: PgBoss.JobWithMetadata<IngestJob>) {
       [photoId, d?.width ?? null, d?.height ?? null, d?.takenAt ?? null, thumbId, previewId, durationMs, isVideo],
     );
     await removeSpool(spooled);
+    // Everyone else on the event hears about it, in a batch (services/push.ts).
+    await notePhotoReady(photo.event_id, photo.uploader_id).catch(() => {});
 
     if (isVideo) {
       emitStatus(photo.event_id, photoId, { status: "ready", faceStatus: "skipped", mediaType: "video" });
