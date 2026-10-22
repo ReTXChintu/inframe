@@ -90,6 +90,13 @@ export async function buildApp(opts: { logger?: FastifyServerOptions["logger"] }
 
   // Production: serve the built web app, with SPA fallback for client routes.
   if (fs.existsSync(config.webDist)) {
+    // Android App Links: the app's signing certificate, so event pages open in it. Served by hand,
+    // since the static plugin won't serve a dot-folder.
+    const assetLinks = `${config.webDist}/.well-known/assetlinks.json`;
+    app.get("/.well-known/assetlinks.json", async (_req, reply) => {
+      if (!fs.existsSync(assetLinks)) return reply.code(404).send({ code: "not_found", message: "Not found." });
+      return reply.type("application/json").send(fs.readFileSync(assetLinks));
+    });
     await app.register(fastifyStatic, { root: config.webDist, wildcard: false });
     app.setNotFoundHandler((req, reply) => {
       const path = req.url.split("?")[0] ?? "";

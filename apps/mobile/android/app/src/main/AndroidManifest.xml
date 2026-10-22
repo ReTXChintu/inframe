@@ -40,6 +40,25 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- An event's web page opens here (App Links: verified against
+                 https://in-frame.duckdns.org/.well-known/assetlinks.json). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="in-frame.duckdns.org" android:pathPrefix="/events/" />
+            </intent-filter>
+            <!-- inframe://app/events/<id>: what Trippin opens, which works whether or
+                 not the App Link above is verified. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="inframe" android:host="app" />
+            </intent-filter>
+            <!-- Links are read by lib/state/deep_links.dart (app_links), not pushed
+                 to the navigator by Flutter. -->
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
         </activity>
         <!-- WorkManager's foreground service, typed for Android 14+ (background uploads). -->
         <service

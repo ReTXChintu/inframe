@@ -6,6 +6,7 @@ environment:
   sdk: ^3.13.2
 
 dependencies:
+  app_links: ^7.2.2
   background_downloader: ^9.6.4
   cached_network_image: ^4.0.4
   dio: ^5.11.1

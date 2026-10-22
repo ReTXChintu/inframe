@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../state/deep_links.dart';
 import '../theme.dart';
 import '../widgets/update_banner.dart';
 import 'events_screen.dart';
@@ -20,7 +21,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => checkForAppUpdate(context));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      checkForAppUpdate(context);
+      // Signed in: an event link that arrived before now opens.
+      DeepLinks.instance.attach();
+    });
+  }
+
+  @override
+  void dispose() {
+    DeepLinks.instance.detach();
+    super.dispose();
   }
 
   @override

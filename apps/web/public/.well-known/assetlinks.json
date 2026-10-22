@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.inframe.android",
+      "sha256_cert_fingerprints": ["8C:2F:AD:76:3D:41:D7:43:F0:F4:E1:0E:C9:84:CA:3C:7D:3B:64:4A:15:92:4E:2C:4A:09:FD:AD:88:10:0D:34"]
+    }
+  }
+]
