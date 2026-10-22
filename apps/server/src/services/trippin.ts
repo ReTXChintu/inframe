@@ -229,11 +229,12 @@ export async function handleTrippinEvent(delivery: TrippinDelivery, log?: Fastif
           [eventId, trip.url ?? null, tripName(trip.title), start, end],
         );
       } else {
-        // No storage yet: the owner picks a Drive/MEGA folder in InFrame.
+        // No storage yet: the owner picks a Drive/MEGA folder in InFrame. The join code
+        // starts off: the people come from the trip, and the owner can open it up later.
         const row = await one<{ id: string }>(
-          `INSERT INTO events (owner_id, name, kind, starts_on, ends_on, join_code,
+          `INSERT INTO events (owner_id, name, kind, starts_on, ends_on, join_code, join_enabled,
                                external_source, external_id, external_url, external_linked)
-           VALUES ($1, $2, 'trip', $3, $4, $5, $6, $7, $8, true) RETURNING id`,
+           VALUES ($1, $2, 'trip', $3, $4, $5, false, $6, $7, $8, true) RETURNING id`,
           [ownerId, tripName(trip.title), start, end, joinCode, SOURCE, trip.id, trip.url ?? null],
           db,
         );
